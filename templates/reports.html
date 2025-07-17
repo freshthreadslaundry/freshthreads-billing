@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Reports - Fresh Threads</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <style>
+    .summary-box p {
+      font-size: 1.25rem;
+      font-weight: bold;
+      color: #2c3e50;
+    }
+    .summary-box h5 {
+      font-weight: bold;
+      color: #1abc9c;
+    }
+    #billPreviewModal .modal-body {
+      font-size: 1rem !important;
+      font-family: inherit !important;
+      color: inherit !important;
+    }
+    #billPreviewModal .modal-body * {
+      font-size: inherit !important;
+      font-family: inherit !important;
+      color: inherit !important;
+    }
+    .card-header:hover {
+      background-color: #f1f1f1;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2 class="fw-bold text-primary mb-0">📊 Reports Dashboard</h2>
+      <a class="btn btn-outline-secondary" href="/">🏠 Home</a>
+    </div>
+
+    <!-- Sales Report Section -->
+    <div class="card mb-3 shadow-sm">
+      <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#salesSection" role="button" aria-expanded="false">
+        🧾 Sales Report
+        <span class="text-muted small">Click to toggle</span>
+      </div>
+      <div class="collapse" id="salesSection">
+        <div class="card-body">
+          <form id="generateForm" action="/reports" method="GET">
+            <div class="row g-3 align-items-end">
+              <div class="col-md-3">
+                <label for="start" class="form-label">Start Date</label>
+                <input type="date" id="start" name="start" class="form-control">
+              </div>
+              <div class="col-md-3">
+                <label for="end" class="form-label">End Date</label>
+                <input type="date" id="end" name="end" class="form-control">
+              </div>
+              <div class="col-md-3">
+                <button type="submit" class="btn btn-primary w-100">Generate Report</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Daily Detail Report Section -->
+    <div class="card mb-3 shadow-sm">
+      <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#dailySection" role="button" aria-expanded="false">
+        📅 Daily Detail Report
+        <span class="text-muted small">Click to toggle</span>
+      </div>
+      <div class="collapse" id="dailySection">
+        <div class="card-body">
+          <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+              <label for="dailyDate" class="form-label">Daily Report Date</label>
+              <input type="date" id="dailyDate" class="form-control">
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+              <button type="button" id="runDailyBtn" class="btn btn-warning">Daily</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Outstanding Report Section -->
+    <div class="card mb-3 shadow-sm">
+      <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#outstandingSection" role="button" aria-expanded="false">
+        💰 Outstanding Report
+        <span class="text-muted small">Click to toggle</span>
+      </div>
+      <div class="collapse" id="outstandingSection">
+        <div class="card-body">
+          <button type="button" id="runOutstandingBtn" class="btn btn-danger">Outstanding</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- View and Cancel Bill Section -->
+    <div class="card mb-3 shadow-sm">
+      <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#viewCancelSection" role="button" aria-expanded="false">
+        🔎 View / Cancel Bill
+        <span class="text-muted small">Click to toggle</span>
+      </div>
+      <div class="collapse" id="viewCancelSection">
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label for="viewBillId" class="form-label">View Bill</label>
+              <div class="input-group">
+                <input type="number" id="viewBillId" class="form-control" placeholder="Enter Bill ID">
+                <button type="button" id="viewBillBtn" class="btn btn-dark">View</button>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <label for="cancelBillId" class="form-label">Cancel Bill</label>
+              <div class="input-group">
+                <input type="number" id="cancelBillId" class="form-control" placeholder="Enter Bill ID">
+                <button type="button" id="previewBillBtn" class="btn btn-outline-primary">Preview</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Expense Report Section -->
+    <div class="card mb-3 shadow-sm">
+      <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#expenseSection" role="button" aria-expanded="false">
+        💸 Expenses Report
+        <span class="text-muted small">Click to toggle</span>
+      </div>
+      <div class="collapse" id="expenseSection">
+        <div class="card-body">
+          <div class="d-flex gap-2 mb-3">
+            <input type="date" id="expStart" class="form-control form-control-sm">
+            <input type="date" id="expEnd" class="form-control form-control-sm">
+            <button type="button" class="btn btn-outline-primary btn-sm" id="runExpenseReport">Run</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary Section -->
+    <div class="row mb-3">
+      <div class="col">
+        <div class="card summary-box shadow-sm">
+          <div class="card-body" id="summary-content">
+            <h5 class="card-title">Summary</h5>
+            <p>Loading...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detailed Report Results Section -->
+    <div id="reportResults" class="mt-4"></div>
+    <div class="card mt-3">
+      <div class="card-body">
+        <div id="expenseReportTable"></div>
+      </div>
+    </div>
+  </div>
+    <!-- Preview Modal -->
+    <div aria-hidden="true" aria-labelledby="billPreviewModalLabel" class="modal fade" id="billPreviewModal" tabindex="-1">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="billPreviewModalLabel">Bill Preview</h5>
+                    <button aria-label="Close" class="btn-close" data-bs-dismiss="modal" type="button"></button>
+                </div>
+                <div class="modal-body" id="billPreviewContent">
+                    <!-- Bill content will load here -->
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-danger" id="cancelBillBtn" type="button">Confirm Cancel</button>
+                    <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="passwordModal" style="display:none; position:fixed; top:30%; left:50%; transform:translate(-50%, -50%); background:#fff; padding:20px; border:1px solid #ccc; box-shadow:0 0 10px #aaa; z-index:1050;">
+    <label id="passwordPromptLabel" for="adminPassword">Enter admin password:</label><br>
+    <input type="password" id="adminPassword" class="form-control mt-2"><br>
+    <div class="d-flex justify-content-end gap-2 mt-2">
+        <button class="btn btn-primary" onclick="submitPassword()">OK</button>
+        <button class="btn btn-secondary" onclick="closePasswordModal()">Cancel</button>
+    </div>
+</div>
+    <script>
+function checkAdminPassword(promptText = "Enter admin password:") {
+    return new Promise(resolve => {
+        const modal = document.getElementById("passwordModal");
+        const input = document.getElementById("adminPassword");
+        const label = document.getElementById("passwordPromptLabel");
+
+        modal.style.display = "block";
+        label.textContent = promptText;
+        input.value = "";
+        input.focus();
+
+        window.submitPassword = async function () {
+            const password = input.value;
+            closePasswordModal();
+
+            if (!password) return resolve(false);
+
+            const res = await fetch("/api/verify-password", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ password })
+            });
+
+            const result = await res.json();
+            if (!result.success) {
+                alert("Access denied. Incorrect password.");
+                return resolve(false);
+            }
+
+            return resolve(true);
+        };
+
+        window.closePasswordModal = function () {
+            modal.style.display = "none";
+        };
+    });
+}
+
+function loadOutstandingReportWithoutPassword() {
+
+    const old = document.getElementById("resultsTable");
+    if (old) old.remove();
+    document.getElementById("reportResults").innerHTML = "";
+    
+
+    fetch("/outstanding_summary")
+        .then(res => res.json())
+        .then(data => updateSummaryBox(data, "outstanding"));
+
+    fetch("/api/outstanding-report")
+        .then(res => res.json())
+        .then(data => {
+            let html = `<h4>Outstanding Report</h4>`;
+            if (!data.length) {
+                html += '<p>No outstanding bills.</p>';
+            } else {
+                html += `<table class="table table-sm table-bordered mt-3">
+                    <thead>
+                        <tr>
+                            <th>Bill ID</th>
+                            <th>Customer</th>
+                            <th>Phone</th>
+                            <th>Items</th>
+                            <th>Total</th>
+                            <th>Delivery Date</th>
+                            <th>Payment</th>
+                            <th>Delivery</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+                for (const row of data) {
+                    html += `<tr>
+                        <td><a href="/bill/${row.bill_id}" target="_blank">#${row.bill_id}</a></td>
+                        <td>${row.customer_name}</td>
+                        <td>${row.customer_phone}</td>
+                        <td>${row.items}</td>
+                        <td>${row.balance_amount}</td>
+                        <td>${formatDate(row.delivery_date)}</td>
+                        <td style="color: ${row.payment_status === 'Paid' ? 'green' : 'red'}">
+                            ${row.payment_status === 'Paid' ? '✅ Paid' : `<button class='btn btn-sm btn-outline-success' onclick='markPaid(${row.bill_id})'>Mark Paid</button>`}
+                        </td>
+                        <td style="color: ${row.delivery_status === 'Delivered' ? 'green' : 'red'}">
+                            ${row.delivery_status === 'Delivered' ? '✅ Delivered' : `<button class='btn btn-sm btn-outline-primary' onclick='markDelivered(${row.bill_id})'>Mark Delivered</button>`}
+                        </td>
+                    </tr>`;
+                }
+                html += '</tbody></table>';
+            }
+
+            document.getElementById("reportResults").innerHTML = html;
+        });
+}
+
+        document.addEventListener("DOMContentLoaded", function () {
+            
+            function formatDate(dateStr) {
+                if (!dateStr) return '';
+                const date = new Date(dateStr);
+                const day = String(date.getDate()).padStart(2, '0');
+                const month = date.toLocaleString('en-US', { month: 'short' });
+                const year = String(date.getFullYear()).slice(-2);
+                return `${day}-${month}-${year}`;
+            }
+            
+            function setTodayIfEmpty(id) {
+                const el = document.getElementById(id);
+                if (el && !el.value) {
+                    const today = new Date();
+                    const yyyy = today.getFullYear();
+                    const mm = String(today.getMonth() + 1).padStart(2, '0');
+                    const dd = String(today.getDate()).padStart(2, '0');
+                    el.value = `${yyyy}-${mm}-${dd}`;
+                }
+            }
+function updateSummaryBox(data, mode = "outstanding") {
+    let left1 = '', left2 = '', right1 = '', right2 = '';
+
+    if (mode === "outstanding") {
+        left1 = `Pending Deliveries Today: <span class="text-dark">${data.pending_today ?? '-'}</span>`;
+        left2 = `Pending Deliveries Tomorrow: <span class="text-dark">${data.pending_tomorrow ?? '-'}</span>`;
+        right1 = `Pending Payments: <span class="text-dark">${data.pending_payment_count ?? '-'}</span>`;
+        right2 = `Total Pending Amount: ₹<span class="text-dark">${data.pending_amount ?? '-'}</span>`;
+    } else if (mode === "daily") {
+        left1 = `Total Bills: <span class="text-dark">${data.total_bills ?? '-'}</span>`;
+        right1 = `Total Sales: ₹<span class="text-dark">${data.total_sales ?? '-'}</span>`;
+    }
+
+    document.getElementById("summary-content").innerHTML = `
+        <h5 class="card-title">Summary</h5>
+        <div class="row">
+            <div class="col-md-6">
+                ${left1 ? `<p>${left1}</p>` : ''}
+                ${left2 ? `<p>${left2}</p>` : ''}
+            </div>
+            <div class="col-md-6">
+                ${right1 ? `<p>${right1}</p>` : ''}
+                ${right2 ? `<p>${right2}</p>` : ''}
+            </div>
+        </div>
+    `;
+}
+            ["start", "end", "dailyDate", "deliveryDate"].forEach(setTodayIfEmpty);
+            const expStartInput = document.getElementById("expStart");
+const expEndInput = document.getElementById("expEnd");
+
+const today = new Date();
+const yesterday = new Date(today);
+yesterday.setDate(today.getDate() - 1);
+
+const format = (d) => d.toISOString().split("T")[0];
+
+if (expStartInput && !expStartInput.value) expStartInput.value = format(yesterday);
+if (expEndInput && !expEndInput.value) expEndInput.value = format(today);
+
+            
+            document.getElementById("runDailyBtn").addEventListener("click", function () {
+                const date = document.getElementById("dailyDate").value;
+                if (!date) return alert("Please select a date");
+fetch(`/api/summary-daily?date=${date}`)
+    .then(res => res.json())
+    .then(data => {
+ updateSummaryBox(data, "daily");
+    });
+                // 🔥 CLEAR ANY PREVIOUS REPORTS
+                const old = document.getElementById("resultsTable");
+                if (old) old.remove();
+                document.getElementById("reportResults").innerHTML = "";
+                document.getElementById("expenseReportTable").innerHTML = "";
+
+                fetch(`/api/daily-report?date=${date}`)
+                .then(res => res.json())
+                .then(data => {
+                    let html = `<div class="d-flex justify-content-between align-items-center">
+                            <h4>Daily Report for ${date}</h4>
+                            <a href="/reports/export-daily?date=${date}" class="btn btn-success">Export to Excel</a>
+                        </div>`;
+                        if (!data.length) {
+                            html += '<p>No records found.</p>';
+                        } else {
+                            html += `<table class="table table-sm table-bordered mt-3">
+                    <thead>
+                        <tr>
+                            <th>Bill ID</th>
+                            <th>Customer</th>
+                            <th>Phone</th>
+                            <th>Service</th>
+                            <th>Items</th>
+                            <th>Rate</th>
+                            <th>Total</th>
+                            <th>Delivery Date</th>
+                            <th>Payment</th>
+                            <th>Delivery</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+                                let lastBillId = null;
+for (const row of data) {
+    const showBillId = row.bill_id !== lastBillId;
+    html += `<tr>
+        <td>${showBillId ? `<a href="/bill/${row.bill_id}" target="_blank">#${row.bill_id}</a>` : ''}</td>
+        <td>${showBillId ? row.customer_name : ''}</td>
+        <td>${showBillId ? row.customer_phone : ''}</td>
+        <td>${row.service_name}</td>
+        <td>${row.items}</td>
+        <td>${row.rate}</td>
+        <td>${row.total}</td>
+        <td>${formatDate(row.delivery_date)}</td>
+        <td style="color: ${row.payment_status === 'Paid' ? 'green' : 'red'}">
+            ${showBillId ? (row.payment_status === 'Paid' ? '✅ Paid' : '❌ Unpaid') : ''}
+        </td>
+        <td style="color: ${row.delivery_status === 'Delivered' ? 'green' : 'red'}">
+            ${showBillId ? (row.delivery_status === 'Delivered' ? '✅ Delivered' : '❌ Not Delivered') : ''}
+        </td>
+    </tr>`;
+    lastBillId = row.bill_id;
+}
+
+                                    html += '</tbody></table>';
+                                }
+                                document.getElementById("reportResults").innerHTML = html;
+                            });
+                        });
+                        
+document.getElementById("runOutstandingBtn").addEventListener("click", async function () {
+    const ok = await checkAdminPassword("Enter admin password to view Outstanding Report:");
+    if (!ok) return;
+
+    const date = document.getElementById("dailyDate").value;
+    if (!date) return alert("Please select a date");
+
+    // 🔥 CLEAR ANY PREVIOUS REPORTS
+    const old = document.getElementById("resultsTable");
+    if (old) old.remove();
+    document.getElementById("reportResults").innerHTML = "";
+    document.getElementById("expenseReportTable").innerHTML = "";
+    // ✅ Fetch and populate outstanding summary
+    fetch("/outstanding_summary")
+        .then(res => res.json())
+        .then(data => {
+            updateSummaryBox(data, "outstanding");
+        });
+
+    // 🔄 Load detailed outstanding report
+    fetch("/api/outstanding-report")
+        .then(res => res.json())
+        .then(data => {
+            let html = `<h4>Outstanding Report</h4>`;
+            if (!data.length) {
+                html += '<p>No outstanding bills.</p>';
+            } else {
+                html += `<table class="table table-sm table-bordered mt-3">
+                    <thead>
+                        <tr>
+                            <th>Bill ID</th>
+                            <th>Customer</th>
+                            <th>Phone</th>
+                            <th>Items</th>
+                            <th>Total</th>
+                            <th>Delivery Date</th>
+                            <th>Payment</th>
+                            <th>Delivery</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+                for (const row of data) {
+                    html += `<tr>
+                        <td><a href="/bill/${row.bill_id}" target="_blank">#${row.bill_id}</a></td>
+                        <td>${row.customer_name}</td>
+                        <td>${row.customer_phone}</td>
+                        <td>${row.items}</td>
+                        <td>${row.balance_amount}</td>
+                        <td>${formatDate(row.delivery_date)}</td>
+                        <td style="color: ${row.payment_status === 'Paid' ? 'green' : 'red'}">
+                            ${row.payment_status === 'Paid' ? '✅ Paid' : `<button class='btn btn-sm btn-outline-success' onclick='markPaid(${row.bill_id})'>Mark Paid</button>`}
+                        </td>
+                        <td style="color: ${row.delivery_status === 'Delivered' ? 'green' : 'red'}">
+                            ${row.delivery_status === 'Delivered' ? '✅ Delivered' : `<button class='btn btn-sm btn-outline-primary' onclick='markDelivered(${row.bill_id})'>Mark Delivered</button>`}
+                        </td>
+                    </tr>`;
+                }
+                html += '</tbody></table>';
+            }
+            document.getElementById("reportResults").innerHTML = html;
+        });
+});
+
+                                
+                                document.getElementById("viewBillBtn").addEventListener("click", function () {
+                                    const billId = document.getElementById("viewBillId").value;
+                                    if (!billId) return alert("Please enter a Bill ID");
+                                    window.open(`/bill/${billId}`, '_blank');
+                                });
+                                
+                                document.getElementById("previewBillBtn").addEventListener("click", function () {
+                                    const billId = document.getElementById("cancelBillId").value;
+                                    if (!billId) return alert("Please enter a Bill ID");
+                                    
+                                    fetch(`/bill/${billId}/embed`)
+                                    .then(res => {
+                                        if (!res.ok) throw new Error("Bill not found");
+                                        return res.text();
+                                    })
+                                    .then(html => {
+                                        document.getElementById("billPreviewContent").innerHTML = html;
+                                        document.getElementById("cancelBillBtn").dataset.billId = billId;
+                                        new bootstrap.Modal(document.getElementById("billPreviewModal")).show();
+                                    })
+                                    .catch(err => {
+                                        console.error(err);
+                                        alert(err);
+                                    });
+                                });
+                                
+                                document.getElementById("cancelBillBtn").addEventListener("click", function () {
+                                    const billId = this.dataset.billId;
+                                    if (!billId) return;
+                                    
+                                    if (!confirm(`Are you sure you want to cancel bill #${billId}?`)) return;
+                                    
+                                    fetch("/api/cancel-bill", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ bill_id: billId })
+                                    })
+                                    .then(res => res.json())
+                                    .then(response => {
+                                        alert(response.message);
+                                        const modal = bootstrap.Modal.getInstance(document.getElementById("billPreviewModal"));
+                                        modal.hide();
+                                    })
+                                    .catch(err => {
+                                        console.error(err);
+                                        alert("Error cancelling the bill.");
+                                    });
+                                });
+                                
+           window.markPaid = function (billId) {
+    fetch("/api/mark-paid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bill_id: billId })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+
+            // ✅ Just update the button cell for that bill
+            const row = document.querySelector(`a[href='/bill/${billId}']`)?.closest("tr");
+            if (row) {
+                row.querySelector("td:nth-child(7)").innerHTML = "✅ Paid";
+            }
+        }
+    });
+};
+
+                                
+   window.markDelivered = function (billId) {
+    fetch("/api/mark-delivered", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bill_id: billId })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+
+            const row = document.querySelector(`a[href='/bill/${billId}']`)?.closest("tr");
+            if (row) {
+                row.querySelector("td:nth-child(8)").innerHTML = "✅ Delivered";
+            }
+        }
+    });
+};
+
+document.getElementById("generateForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    const start = document.getElementById("start").value;
+    const end = document.getElementById("end").value;
+    if (!start || !end) return;
+
+    // ✅ Update summary
+    fetch(`/api/summary-range?start=${start}&end=${end}`)
+        .then(res => res.json())
+        .then(data => {
+            updateSummaryBox({
+                total_bills: data.total_bills,
+                total_sales: data.total_sales
+            }, "daily");
+        });
+
+// ✅ Load summary table grouped by date
+fetch(`/api/range-summary-by-date?start=${start}&end=${end}`)
+    .then(res => res.json())
+    .then(data => {
+        let html = `<h4>Report for ${start} to ${end}</h4>`;
+        if (!data.length) {
+            html += '<p>No records found.</p>';
+        } else {
+            html += `<table class="table table-sm table-bordered mt-3">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Total Sales</th>
+                        <th>Walk-in Sales</th>
+                        <th>Online Sales</th>
+                        <th>No. of Bills</th>
+                        <th>Walk-in</th>
+                        <th>Online</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+for (const row of data) {
+    const date = formatDate(row.report_date);
+    const total = parseFloat(row.total_sales);
+    const walkin = parseFloat(row.walkin_sales);
+    const online = parseFloat(row.online_sales);
+
+    const formattedTotal = total.toLocaleString("en-IN", { minimumFractionDigits: 2 });
+    const formattedWalkin = walkin.toLocaleString("en-IN", { minimumFractionDigits: 2 });
+    const formattedOnline = online.toLocaleString("en-IN", { minimumFractionDigits: 2 });
+
+    const bgColor = total > 8000 ? 'bg-success text-white' : (total < 4000 ? 'bg-danger text-white' : '');
+
+    html += `<tr>
+        <td>${date}</td>
+        <td class="text-end ${bgColor}">₹${formattedTotal}</td>
+        <td class="text-end">₹${formattedWalkin}</td>
+        <td class="text-end">₹${formattedOnline}</td>
+        <td>${row.bill_count}</td>
+        <td>${row.walkin_count}</td>
+        <td>${row.online_count}</td>
+    </tr>`;
+}
+
+            html += `</tbody></table>`;
+        }
+
+        document.getElementById("reportResults").innerHTML = html;
+        document.getElementById("expenseReportTable").innerHTML = "";
+
+    });
+
+});
+document.getElementById("runExpenseReport").addEventListener("click", function () {
+    
+    document.getElementById("reportResults").innerHTML = "";
+    const start = document.getElementById("expStart").value;
+    const end = document.getElementById("expEnd").value;
+
+    if (!start || !end) return alert("Please select a date range.");
+
+    fetch(`/api/expense-report?start=${start}&end=${end}`)
+        .then(res => res.json())
+        .then(res => {
+            if (!res.success) {
+                alert("Failed to load report");
+                return;
+            }
+
+            const data = res.data;
+            let total = 0;
+
+            let html = `<table class="table table-bordered table-sm mt-3">
+<thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Notes</th></tr></thead><tbody>`;
+
+            data.forEach(row => {
+                total += parseFloat(row.amount);
+                html += `<tr>
+<td>${row.date}</td>
+<td>${row.type}</td>
+<td class="text-end">₹${parseFloat(row.amount).toLocaleString()}</td>
+<td>${row.notes || ""}</td>
+</tr>`;
+            });
+
+            html += `</tbody><tfoot>
+<tr><td colspan="2"><strong>Total</strong></td>
+<td class="text-end"><strong>₹${total.toLocaleString()}</strong></td>
+<td></td></tr>
+</tfoot></table>`;
+
+            document.getElementById("expenseReportTable").innerHTML = html;
+        });
+});
+
+
+                            });
+
+                        </script>
+                    </body>
+                    </html>

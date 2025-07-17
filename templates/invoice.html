@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Invoice - Fresh Threads</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #fff;
+            font-size: 12px;
+            line-height: 1.2;
+        }
+        
+        .invoice-box {
+            max-width: 400px;
+            margin: auto;
+            padding: 10px;
+            font-size: 12px;
+        }
+        
+        .centered {
+            text-align: center;
+        }
+        
+        .mb-1 {
+            margin-bottom: 5px;
+        }
+        
+        .table td, .table th {
+            padding: 2px 4px;
+            vertical-align: top;
+            font-size: 12px;
+            white-space: nowrap;  /* prevents wrapping */
+        }
+        
+        .table thead th {
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .table tfoot td {
+            font-weight: bold;
+        }
+        
+        .shop-name {
+            font-size: 20px !important;
+            font-weight: 800 !important;
+            margin-bottom: 3px;
+            font-family: Arial, sans-serif;
+            letter-spacing: 0.3px;
+        }
+        .text-right {
+    text-align: right;
+}
+
+        @media print {
+            .screen-only {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="invoice-box">
+        <div class="centered">
+            <h2 class="shop-name">Fresh Threads Laundry & Dry</h2>
+            <h2 class="shop-name">Cleaning Services</h2>
+            <p class="mb-1"><strong>H.No 1, 4/175/53, TELANGANA, 500084</strong></p>
+            <p class="mb-1">GST: 36DJKPS4114P1ZK</p>
+            <p class="mb-1"><strong>📞 7036022033</strong></p>
+            <p class="mb-1">✉️ freshthreadsdl@gmail.com</p>
+            <hr>
+        </div>
+        
+        <div class="container px-0" style="font-size: 14px;">
+            <div class="row mb-1">
+                <div class="col-6"><strong>Bill No:</strong> {{ bill.id }}</div>
+                <div class="col-6 text-end">
+                    <div><strong>Bill Date:</strong></div>
+                    <div>{{ bill.formatted_date }}</div>
+                </div>
+            </div>
+            <div class="row mb-1">
+                <div class="col-12"><strong>Cust Name:</strong> {{ bill.customer_name }}</div>
+            </div>
+            <div class="row mb-1">
+                <div class="col-12"><strong>Cust Ph:</strong> {{ bill.customer_phone }}</div>
+            </div>
+            <div class="row mb-1">
+                <div class="col-12"><strong>Address:</strong> {{ bill.pickup_address }}</div>
+            </div>
+            <div class="row mb-1">
+                <div class="col-6"><strong>Order Type:</strong> {{ bill.order_type }}</div>
+                <div class="col-6 text-end">
+                    <div><strong>Delivery Date</strong></div>
+                    <div>{{ bill.formatted_due_date }}</div>
+                </div>
+                
+            </div>
+        </div>
+        <hr>
+        
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    
+            <th style="width: 45%;">Item</th>
+            <th class="text-right" style="width: 15%; white-space: nowrap;">Qty</th>
+            <th class="text-right" style="width: 20%; white-space: nowrap;">Rate</th>
+            <th class="text-right" style="width: 20%; white-space: nowrap;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set total_qty = 0 %}
+                {% set total_items = items|length %}
+                {% for item in items %}
+                <tr>
+                    <td>{{ item.service_name }}</td>
+                    <td class="text-right">{{ item.qty }}</td>
+<td class="text-right">{{ item.rate }}</td>
+<td class="text-right">{{ item.total }}</td>
+                </tr>
+                {% set total_qty = total_qty + item.qty %}
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="3" style="text-align: right;">Total</td>
+                    <td style="text-align: right; white-space: nowrap;">₹{{ "%.2f"|format(subtotal) }}</td>
+                </tr>
+                
+                {% if discount_amount > 0 %}
+                <tr>
+                    <td colspan="3" style="text-align: right;">Discount</td>
+                    <td style="text-align: right; white-space: nowrap;">- ₹{{ "%.2f"|format(discount_amount) }}</td>
+                </tr>
+                {% endif %}
+                <tr>
+                    <td colspan="3" style="text-align: right;"><strong>Final Bill</strong></td>
+                    <td style="text-align: right; white-space: nowrap;"><strong>₹{{ "%.2f"|format(final_total) }}</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+        
+{% if bill.is_paid %}
+<div style="text-align: center; margin-top: 30px;">
+    <span class="badge bg-success" style="font-size: 16px; padding: 10px 20px;">✅ PAID</span>
+</div>
+{% elif qr_image %}
+<div style="text-align: center; margin-top: 30px;">
+    <p style="font-weight: bold;">Scan to Pay ₹{{ "%.2f"|format(final_total) }}</p>
+    <img src="{{ url_for('static', filename='qr/' + qr_image) }}" alt="UPI QR Code" width="200">
+</div>
+{% endif %}
+ <div class="text-center mt-4">
+    <p><strong>Thank you! Visit again 🙏</strong></p>
+    <p><strong></strong></p>
+    <p><strong></strong></p>
+    <p><strong></strong></p>
+    <br><br><br><br><br><br><br><br><br>
+</div>
+       
+<div class="screen-only text-center mt-3">
+    <button id="printOnly" class="btn btn-sm btn-outline-primary">🖨️ Print</button>
+    <button id="whatsappOnly" class="btn btn-sm btn-outline-success ms-2">📤 WhatsApp</button>
+    <a href="/billing" class="btn btn-sm btn-outline-secondary ms-2">🏠 Home</a>
+</div>
+
+        
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>  
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script>
+    // 🖨️ PRINT ONLY BUTTON
+    document.getElementById("printOnly").addEventListener("click", function (e) {
+        e.preventDefault();
+        window.print();
+    });
+
+    // 📤 WHATSAPP BUTTON: Capture, Copy, Open WhatsApp
+    document.getElementById("whatsappOnly").addEventListener("click", function (e) {
+        e.preventDefault();
+
+        const customerName = "{{ bill.customer_name }}";
+        const billId = "{{ bill.id }}";
+        const billDateRaw = "{{ bill.formatted_date }}";
+        const safeDate = billDateRaw.replace(/[^a-zA-Z0-9]/g, "-");
+        const fileName = `invoice_${billId}_${safeDate}.png`;
+
+        const screenOnlyElems = document.querySelectorAll(".screen-only");
+        screenOnlyElems.forEach(el => el.style.display = "none");
+
+        html2canvas(document.querySelector(".invoice-box")).then(canvas => {
+            screenOnlyElems.forEach(el => el.style.display = "");
+
+            // ✅ Copy to clipboard
+            canvas.toBlob(blob => {
+                if (!blob) {
+                    alert("❌ Failed to generate image blob.");
+                    return;
+                }
+                const item = new ClipboardItem({ "image/png": blob });
+                navigator.clipboard.write([item]).then(() => {
+                }).catch(err => {
+                    alert("❌ Clipboard copy failed: " + err);
+                });
+
+                // ✅ Open WhatsApp
+                const rawPhone = "{{ bill.customer_phone|replace('+', '') }}";
+                const phoneWithCountry = `91${rawPhone}`;
+                const message = encodeURIComponent(`Dear  ${customerName}, Thank you for choosing Fresh Threads Laundry & Dry Cleaning Services.
+Please find your invoice attached. Should you have any questions, we’re happy to assist.
+– Fresh Threads Team`);
+                const whatsappUrl = `https://wa.me/${phoneWithCountry}?text=${message}`;
+                window.open(whatsappUrl, "_blank", "width=800,height=600,noopener,noreferrer");
+            });
+        }).catch(error => {
+            alert("❌ Error capturing invoice: " + error);
+        });
+    });
+</script>
+
+</body>
+</html>

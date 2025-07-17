@@ -1,0 +1,73 @@
+<!-- templates/customers.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Customers - Fresh Threads</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body>
+<div class="container mt-3">
+    <a href="/" class="btn btn-outline-primary">🏠 Home</a>
+</div>
+<div class="container mt-5">
+    <h2>Customer Management</h2>
+    <form method="POST" class="mb-4">
+        <input type="hidden" name="customer_id" id="customer_id" value="{{ edit_customer.id if edit_customer else '' }}">
+        <div class="row mb-2">
+            <div class="col">
+                <input type="text" name="name" class="form-control" placeholder="Name" required value="{{ edit_customer.name if edit_customer else '' }}">
+            </div>
+            <div class="col">
+                <input type="text" name="phone" class="form-control" placeholder="Phone" required value="{{ edit_customer.phone if edit_customer else '' }}">
+            </div>
+            <div class="col">
+                <input type="email" name="email_address" class="form-control" placeholder="Email" value="{{ edit_customer.email_address if edit_customer else ' ' }}">
+            </div>
+        </div>
+        <div class="row mb-2">
+            <div class="col">
+                <input type="text" name="address" class="form-control" placeholder="Address" value="{{ edit_customer.address if edit_customer else '' }}">
+            </div>
+            <div class="col">
+                <select name="customer_type" class="form-control">
+                    <option value="">Customer Type</option>
+                    <option value="Walk-in" {% if edit_customer and edit_customer.customer_type == 'Walk-in' %}selected{% endif %}>Walk-in</option>
+                    <option value="Regular" {% if edit_customer and edit_customer.customer_type == 'Regular' %}selected{% endif %}>Regular</option>
+                    <option value="Corporate" {% if edit_customer and edit_customer.customer_type == 'Corporate' %}selected{% endif %}>Corporate</option>
+                </select>
+            </div>
+        </div>
+        <button type="submit" class="btn btn-success">Save Customer</button>
+    </form>
+
+    <h4>All Customers</h4>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>Type</th>
+                <th>Address</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cust in customers %}
+            <tr>
+                <td>{{ cust.name }}</td>
+                <td>{{ cust.phone }}</td>
+                <td>{{ cust.email_address or '' }}</td>
+                <td>{{ cust.customer_type or '' }}</td>
+                <td>{{ cust.address or '' }}</td>
+                <td>
+                    <a href="/customers?edit={{ cust.id }}" class="btn btn-sm btn-warning">Edit</a>
+                    <a href="/customers?delete={{ cust.id }}" class="btn btn-sm btn-danger" onclick="return confirm('Delete this customer?')">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+</body>
+</html>

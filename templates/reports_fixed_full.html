@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+<title>Reports - Fresh Threads</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<style>
+        .summary-box p {
+            font-size: 1.25rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .summary-box h5 {
+            font-weight: bold;
+            color: #1abc9c;
+        }
+          #billPreviewModal .modal-body {
+    font-size: 1rem !important;
+    font-family: inherit !important;
+    color: inherit !important;
+  }
+
+  #billPreviewModal .modal-body * {
+    font-size: inherit !important;
+    font-family: inherit !important;
+    color: inherit !important;
+  }
+    </style>
+</head>
+<body>
+<div class="container mt-4">
+<h2>Billing Report</h2>
+<a class="btn btn-secondary position-absolute top-0 end-0 m-3" href="/">🏠 Home</a>
+<form action="/reports" class="row g-3 mb-4 align-items-end" method="GET">
+<div class="col-auto">
+<label for="start" id="startLabel">Start Date</label>
+<input class="form-control" id="start" name="start" type="date"/>
+</div>
+<div class="col-auto">
+<label for="end" id="endLabel">End Date</label>
+<input class="form-control" id="end" name="end" type="date"/>
+</div>
+<div class="col-auto">
+<button class="btn btn-primary" type="submit">Generate Report</button>
+</div>
+<div class="col-auto d-flex align-items-end">
+<div>
+<label for="dailyDate" id="dailyDateLabel">Daily Report Date</label>
+<input class="form-control" id="dailyDate" type="date">
+</input></div>
+</div>
+<div class="col-auto">
+<button class="btn btn-warning" id="runDailyBtn" type="button">Run Daily Report</button>
+</div>
+<div class="col-auto">
+<button class="btn btn-danger" id="runOutstandingBtn" type="button">Outstanding Report</button>
+</div>
+<div class="col-auto">
+<label for="viewBillId">Bill ID</label>
+<input class="form-control" id="viewBillId" placeholder="Enter Bill ID" type="number"/>
+</div>
+<div class="col-auto">
+<button class="btn btn-dark" id="viewBillBtn" type="button">View Bill</button>
+</div>
+<div class="col-auto d-flex justify-content-end align-items-end gap-2">
+<div>
+<label for="cancelBillId">Cancel Bill ID</label>
+<input class="form-control" id="cancelBillId" placeholder="Enter Bill ID" type="number"/>
+</div>
+<div>
+<label class="invisible d-block">Preview</label>
+<button class="btn btn-outline-primary" id="previewBillBtn" type="button">Preview</button>
+</div>
+</div>
+</form>
+<div class="mt-3" id="cancelPreviewArea"></div>
+<div class="row mb-3">
+<div class="col">
+<div class="card summary-box">
+<div class="card-body">
+<h5 class="card-title">Summary</h5>
+<p>Total Bills: {{ bills|length }}</p>
+<p>Total Amount: ₹{{ total_balance }}</p>
+</div>
+</div>
+</div>
+</div>
+<div id="resultsTable"><table class="table table-bordered">
+<thead>
+<tr>
+<th>Bill ID</th>
+<th>Customer</th>
+<th>Phone</th>
+<th>Service</th>
+<th>Items</th>
+<th>Rate</th>
+<th>Total</th>
+<th>Delivery Date</th>
+<th>Payment</th>
+<th>Delivery</th>
+</tr>
+</thead>
+<tbody>
+        {% for b in bills %}
+        <tr>
+<td><a href="/bill/{{ b.id }}" target="_blank">#{{ b.id }}</a></td>
+<td>{{ b.formatted_date }}</td>
+<td>{{ b.customer_name }}</td>
+<td>{{ b.customer_phone }}</td>
+<td>₹{{ b.total }}</td>
+<td>₹{{ (b.total - b.balance_amount)|round(2) }}</td>
+<td>₹{{ b.balance_amount }}</td>
+</tr>
+        {% else %}
+        <tr><td class="text-center" colspan="7">No records found.</td></tr>
+        {% endfor %}
+        </tbody>
+</table></div>
+<div class="mt-4" id="reportResults"></div>
+</div>
+<!-- Preview Modal -->
+<div aria-hidden="true" aria-labelledby="billPreviewModalLabel" class="modal fade" id="billPreviewModal" tabindex="-1">
+<div class="modal-dialog modal-xl modal-dialog-centered modal-scrollable">
+<div class="modal-content">
+<div class="modal-header">
+<h5 class="modal-title" id="billPreviewModalLabel">Bill Preview</h5>
+<button aria-label="Close" class="btn-close" data-bs-dismiss="modal" type="button"></button>
+</div>
+<div class="modal-body" id="billPreviewContent">
+<!-- Bill content will load here -->
+</div>
+<div class="modal-footer">
+<button class="btn btn-danger" id="cancelBillBtn" type="button">Confirm Cancel</button>
+<button class="btn btn-secondary" data-bs-dismiss="modal" type="button">Close</button>
+</div>
+</div>
+</div>
+</div>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    function formatDate(dateStr) {
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = date.toLocaleString('en-US', { month: 'short' });
+        const year = String(date.getFullYear()).slice(-2);
+        return `${day}-${month}-${year}`;
+    }
+
+    function setTodayIfEmpty(id) {
+        const el = document.getElementById(id);
+        if (el && !el.value) {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            el.value = `${yyyy}-${mm}-${dd}`;
+        }
+    }
+    ["start", "end", "dailyDate", "deliveryDate"].forEach(setTodayIfEmpty);
+
+    document.getElementById("runDailyBtn").addEventListener("click", function () {
+        const date = document.getElementById("dailyDate").value;
+        if (!date) return alert("Please select a date");
+
+        fetch(`/api/daily-report?date=${date}`)
+            .then(res => res.json())
+            .then(data => {
+                let html = `<div class="d-flex justify-content-between align-items-center">
+                                <h4>Daily Report for ${date}</h4>
+                                <a href="/reports/export-daily?date=${date}" class="btn btn-success">Export to Excel</a>
+                            </div>`;
+                if (!data.length) {
+                    html += '<p>No records found.</p>';
+                } else {
+                    html += `<table class="table table-sm table-bordered mt-3">
+                        <thead>
+                            <tr>
+                                <th>Bill ID</th>
+                                <th>Customer</th>
+                                <th>Phone</th>
+                                <th>Service</th>
+                                <th>Items</th>
+                                <th>Rate</th>
+                                <th>Total</th>
+                                <th>Delivery Date</th>
+                                <th>Payment</th>
+                                <th>Delivery</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+                    for (const row of data) {
+                        html += `<tr>
+                            <td><a href="/bill/${row.bill_id}" target="_blank">#${row.bill_id}</a></td>
+                            <td>${row.customer_name}</td>
+                            <td>${row.customer_phone}</td>
+                            <td>${row.service_name}</td>
+                            <td>${row.items}</td>
+                            <td>${row.rate}</td>
+                            <td>${row.total}</td>
+                            <td>${formatDate(row.delivery_date)}</td>
+                            <td style="color: ${row.payment_status === 'Paid' ? 'green' : 'red'}; font-weight: bold;">
+                                ${row.payment_status === 'Paid' ? '✅ Paid' : '❌ Unpaid'}
+                            </td>
+                            <td style="color: ${row.delivery_status === 'Delivered' ? 'green' : 'red'}; font-weight: bold;">
+                                ${row.delivery_status === 'Delivered' ? '✅ Delivered' : '❌ Not Delivered'}
+                            </td>
+                        </tr>`;
+                    }
+                    html += '</tbody></table>';
+                }
+                document.getElementById("reportResults").innerHTML = html;
+            });
+    });
+
+    document.getElementById("runOutstandingBtn").addEventListener("click", function () {
+        fetch("/api/outstanding-report")
+            .then(res => res.json())
+            .then(data => {
+                let html = `<h4>Outstanding Report</h4>`;
+                if (!data.length) {
+                    html += '<p>No outstanding bills.</p>';
+                } else {
+                    html += `<table class="table table-sm table-bordered mt-3">
+                        <thead>
+                            <tr>
+                                <th>Bill ID</th>
+                                <th>Customer</th>
+                                <th>Phone</th>
+                                <th>Items</th>
+                                <th>Total</th>
+                                <th>Delivery Date</th>
+                                <th>Payment</th>
+                                <th>Delivery</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+                    for (const row of data) {
+                        html += `<tr>
+                            <td><a href="/bill/${row.bill_id}" target="_blank">#${row.bill_id}</a></td>
+                            <td>${row.customer_name}</td>
+                            <td>${row.customer_phone}</td>
+                            <td>${row.items}</td>
+                            <td>${row.balance_amount}</td>
+                            <td>${formatDate(row.delivery_date)}</td>
+                            <td style="color: ${row.payment_status === 'Paid' ? 'green' : 'red'}">
+                                ${row.payment_status === 'Paid' ? '✅ Paid' : `<button class='btn btn-sm btn-outline-success' onclick='markPaid(${row.bill_id})'>Mark Paid</button>`}
+                            </td>
+                            <td style="color: ${row.delivery_status === 'Delivered' ? 'green' : 'red'}">
+                                ${row.delivery_status === 'Delivered' ? '✅ Delivered' : `<button class='btn btn-sm btn-outline-primary' onclick='markDelivered(${row.bill_id})'>Mark Delivered</button>`}
+                            </td>
+                        </tr>`;
+                    }
+                    html += '</tbody></table>';
+                }
+                document.getElementById("reportResults").innerHTML = html;
+            });
+    });
+
+    document.getElementById("viewBillBtn").addEventListener("click", function () {
+        const billId = document.getElementById("viewBillId").value;
+        if (!billId) return alert("Please enter a Bill ID");
+        window.open(`/bill/${billId}`, '_blank');
+    });
+
+    document.getElementById("previewBillBtn").addEventListener("click", function () {
+        const billId = document.getElementById("cancelBillId").value;
+        if (!billId) return alert("Please enter a Bill ID");
+
+        fetch(`/bill/${billId}/embed`)
+            .then(res => {
+                if (!res.ok) throw new Error("Bill not found");
+                return res.text();
+            })
+            .then(html => {
+                document.getElementById("billPreviewContent").innerHTML = html;
+                document.getElementById("cancelBillBtn").dataset.billId = billId;
+                new bootstrap.Modal(document.getElementById("billPreviewModal")).show();
+            })
+            .catch(err => {
+                console.error(err);
+                alert(err);
+            });
+    });
+
+    document.getElementById("cancelBillBtn").addEventListener("click", function () {
+        const billId = this.dataset.billId;
+        if (!billId) return;
+
+        if (!confirm(`Are you sure you want to cancel bill #${billId}?`)) return;
+
+        fetch("/api/cancel-bill", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bill_id: billId })
+        })
+        .then(res => res.json())
+        .then(response => {
+            alert(response.message);
+            const modal = bootstrap.Modal.getInstance(document.getElementById("billPreviewModal"));
+            modal.hide();
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Error cancelling the bill.");
+        });
+    });
+
+    window.markPaid = function (billId) {
+        fetch("/api/mark-paid", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bill_id: billId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                document.getElementById("runOutstandingBtn").click();
+            }
+        });
+    };
+
+    window.markDelivered = function (billId) {
+        fetch("/api/mark-delivered", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bill_id: billId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                document.getElementById("runOutstandingBtn").click();
+            }
+        });
+    };
+});
+</script>
+</body>
+</html>

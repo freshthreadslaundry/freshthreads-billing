@@ -1,0 +1,53 @@
+<!-- templates/services.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Services - Fresh Threads</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body>
+<div class="container mt-3">
+    <a href="/" class="btn btn-outline-primary">🏠 Home</a>
+</div>
+<div class="container mt-5">
+    <h2>Service Management</h2>
+    <form method="POST" class="mb-4">
+        <input type="hidden" name="service_id" value="{{ edit_service.id if edit_service else '' }}">
+        <div class="row mb-2">
+            <div class="col-md-6">
+                <input type="text" name="name" class="form-control" placeholder="Service Name" required value="{{ edit_service.name if edit_service else '' }}">
+            </div>
+            <div class="col-md-4">
+                <input type="number" step="0.01" name="rate" class="form-control" placeholder="Rate" required value="{{ edit_service.rate if edit_service else '' }}">
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-success w-100">Save</button>
+            </div>
+        </div>
+    </form>
+
+    <h4>All Services</h4>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Rate</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for service in services %}
+            <tr>
+                <td>{{ service.name }}</td>
+                <td>{{ '%.2f' | format(service.rate) }}</td>
+                <td>
+                    <a href="/services?edit={{ service.id }}" class="btn btn-sm btn-warning">Edit</a>
+                    <a href="/services?delete={{ service.id }}" class="btn btn-sm btn-danger" onclick="return confirm('Delete this service?')">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+</body>
+</html>
