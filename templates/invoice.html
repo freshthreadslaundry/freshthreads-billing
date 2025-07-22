@@ -68,7 +68,7 @@
             <p class="mb-1"><strong>H.No 1, 4/175/53, TELANGANA, 500084</strong></p>
             <p class="mb-1">GST: 36DJKPS4114P1ZK</p>
             <p class="mb-1"><strong>📞 7036022033</strong></p>
-            <p class="mb-1">✉️ freshthreadsdl@gmail.com</p>
+            <p class="mb-1">✉️ customercare@freshthreadslaundry.co.in</p>
             <hr>
         </div>
         
@@ -116,7 +116,7 @@
                 {% for item in items %}
                 <tr>
                     <td>{{ item.service_name }}</td>
-                    <td class="text-right">{{ item.qty }}</td>
+                    <td class="text-right">{{ item.items }}</td>
 <td class="text-right">{{ item.rate }}</td>
 <td class="text-right">{{ item.total }}</td>
                 </tr>
@@ -135,21 +135,29 @@
                     <td style="text-align: right; white-space: nowrap;">- ₹{{ "%.2f"|format(discount_amount) }}</td>
                 </tr>
                 {% endif %}
-                <tr>
-                    <td colspan="3" style="text-align: right;"><strong>Final Bill</strong></td>
-                    <td style="text-align: right; white-space: nowrap;"><strong>₹{{ "%.2f"|format(final_total) }}</strong></td>
-                </tr>
+     <tr>
+        <td colspan="2" style="font-weight: bold;">Total Items: {{ items | map(attribute='items') | sum }}</td>
+        <td style="text-align: right;"><strong>Final Bill</strong></td>
+        <td style="text-align: right; white-space: nowrap;"><strong>₹{{ "%.2f"|format(final_total) }}</strong></td>
+    </tr>
+
             </tfoot>
         </table>
-        
+
+        {% if not bill.is_paid %}
+<div class="text-center mt-2 screen-only">
+    <a href="{{ url_for('edit_bill', bill_id=bill.id) }}" class="btn btn-sm btn-outline-warning">✏️ Edit Bill</a>
+</div>
+{% endif %}
+
 {% if bill.is_paid %}
 <div style="text-align: center; margin-top: 30px;">
     <span class="badge bg-success" style="font-size: 16px; padding: 10px 20px;">✅ PAID</span>
 </div>
 {% elif qr_image %}
 <div style="text-align: center; margin-top: 30px;">
-    <p style="font-weight: bold;">Scan to Pay ₹{{ "%.2f"|format(final_total) }}</p>
-    <img src="{{ url_for('static', filename='qr/' + qr_image) }}" alt="UPI QR Code" width="200">
+    <!-- <p style="font-weight: bold;">Scan to Pay ₹{{ "%.2f"|format(final_total) }}</p>
+    <img src="{{ url_for('static', filename='qr/' + qr_image) }}" alt="UPI QR Code" width="200"> -->
 </div>
 {% endif %}
  <div class="text-center mt-4">
@@ -208,8 +216,18 @@
                 // ✅ Open WhatsApp
                 const rawPhone = "{{ bill.customer_phone|replace('+', '') }}";
                 const phoneWithCountry = `91${rawPhone}`;
+                const upiLink = "upi://pay?pa=freshthreads0549@iob&pn=Fresh%20Threads%20Laundry&am={{ '%.2f'|format(final_total) }}&cu=INR";
+
                 const message = encodeURIComponent(`Dear  ${customerName}, Thank you for choosing Fresh Threads Laundry & Dry Cleaning Services.
 Please find your invoice attached. Should you have any questions, we’re happy to assist.
+
+
+👇👇👇
+To pay via UPI, click this link: ${upiLink}
+
+🌐 Checkout our services:
+👉 www.freshthreadslaundry.co.in
+
 – Fresh Threads Team`);
                 const whatsappUrl = `https://wa.me/${phoneWithCountry}?text=${message}`;
                 window.open(whatsappUrl, "_blank", "width=800,height=600,noopener,noreferrer");

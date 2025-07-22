@@ -212,7 +212,7 @@ def billing():
 
             pieces = pieces_list[i] if i < len(pieces_list) else ""
             if "kg" in name.lower() and pieces.strip():
-                name = f"{name} ({pieces.strip()} pcs)"
+                name = f"{name} ({qty:.1f} KG)"
                 items = int(pieces.strip())
             else:
                 items = int(qty)
@@ -798,6 +798,50 @@ def expense_report():
 
     return jsonify(success=True, data=data)
 
+@app.route("/bill/edit/<int:bill_id>", methods=["GET", "POST"])
+def edit_bill(bill_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    if request.method == "POST":
+        discount_type = request.form.get("discountType")
+        discount_value = float(request.form.get("discountValue") or 0)
+
+        # Fetch current total and advance_paid
+        cur.execute("SELECT total, advance_paid FROM bills WHERE id = ?", (bill_id,))
+        row = cur.fetchone()
+
+        if not row:
+            conn.close()
+            return "Bill not found", 404
+
+        total = float(row["total"])
+        advance_paid = float(row["advance_paid"] or 0)
+
+        # Calculate discount and new balance
+        if discount_type == "%":
+            discount_amount = total * discount_value / 100
+        else:
+            discount_amount = discount_value
+
+        final_total = max(0, total - discount_amount)
+        balance_amount = max(0, final_total - advance_paid)
+
+        # Update bill
+        cur.execute("""
+            UPDATE bills
+            SET discount_type = ?, discount_value = ?, balance_amount = ?
+            WHERE id = ?
+        """, (discount_type, discount_value, balance_amount, bill_id))
+
+        conn.commit()
+        conn.close()
+        return redirect(url_for("bill_view", bill_id=bill_id))
+
+    # Load current bill for display
+    bill = cur.execute("SELECT * FROM bills WHERE id = ?", (bill_id,)).fetchone()
+    conn.close()
+    return render_template("edit_bill.html", bill=bill)
 
 if __name__ == "__main__":
     app.run(debug=False, use_reloader=False)
