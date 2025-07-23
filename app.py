@@ -664,7 +664,7 @@ def api_summary_range():
 
     return jsonify({
         "total_bills": row["total_bills"] or 0,
-        "total_sales": f"{(row["total_sales"] or 0):.2f}"
+        "total_sales": f"{(row['total_sales'] or 0):.2f}"
     })
 
 @app.route("/api/range-report")
