@@ -532,6 +532,7 @@ def cancel_bill():
     return jsonify({"success": True, "message": f"Bill #{bill_id} cancelled"})
 
 @app.route("/bill/<int:bill_id>/embed")
+@login_required
 def bill_embed(bill_id):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
