@@ -1,4 +1,5 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file
+from flask import Flask, render_template, request, redirect, url_for, send_file, session, flash
+from functools import wraps
 import sqlite3
 from datetime import datetime, timedelta
 from flask import jsonify
@@ -11,6 +12,22 @@ import pandas as pd
 
 ADMIN_PASSWORD = "fresh@123"  # Change this as needed
 app = Flask(__name__)
+app.secret_key = 'supersecretkey'  # Replace with a strong secret in production
+
+# Simple user store (can be expanded later)
+USERS = {
+    'admin': 'password123'  # Change this to your preferred username and password
+}
+
+# Decorator to enforce login
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 DB_PATH = "database/fresh_threads.db"
 
 def generate_upi_qr(upi_id, name, amount, qr_path):
@@ -47,11 +64,13 @@ def get_db_connection():
     return conn
 
 @app.route("/")
+@login_required
 def home():
     return render_template("home.html")
 
 
 @app.route("/services", methods=["GET", "POST"])
+@login_required
 def services():
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -88,6 +107,7 @@ def services():
     return render_template("services.html", services=services, edit_service=edit_service)
 
 @app.route("/customers", methods=["GET", "POST"])
+@login_required
 def customers():
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -133,6 +153,7 @@ def customers():
 
     return render_template("customers.html", customers=customers, edit_customer=customer)
 @app.route("/billing", methods=["GET", "POST"])
+@login_required
 def billing():
     if request.method == "POST":
         data = request.form
@@ -242,6 +263,7 @@ def generate_bill():
 
 
 @app.route("/bill/<int:bill_id>")
+@login_required
 def bill_view(bill_id):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -316,6 +338,7 @@ def bill_view(bill_id):
     )
 
 @app.route('/invoice/pdf/<int:bill_id>')
+@login_required
 def generate_pdf(bill_id):
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -343,6 +366,7 @@ def generate_pdf(bill_id):
     return send_from_directory('static/invoices', f"invoice_{bill_id}.pdf")
 
 @app.route("/reports", methods=["GET"])
+@login_required
 def reports():
     conn = get_db_connection()
     cur = conn.cursor()
@@ -570,6 +594,7 @@ def mark_delivered():
     return jsonify({"success": True, "message": f"Bill #{bill_id} marked as Delivered"})
 
 @app.route("/outstanding_summary")
+@login_required
 def outstanding_summary():
     conn = get_db_connection()
     cur = conn.cursor()
@@ -772,6 +797,7 @@ def add_expense():
     conn.close()
     return jsonify(success=True)
 @app.route("/expenses")
+@login_required
 def expenses_page():
     return render_template("expenses.html")
 
@@ -799,6 +825,7 @@ def expense_report():
     return jsonify(success=True, data=data)
 
 @app.route("/bill/edit/<int:bill_id>", methods=["GET", "POST"])
+@login_required
 def edit_bill(bill_id):
     conn = get_db_connection()
     cur = conn.cursor()
@@ -842,6 +869,21 @@ def edit_bill(bill_id):
     bill = cur.execute("SELECT * FROM bills WHERE id = ?", (bill_id,)).fetchone()
     conn.close()
     return render_template("edit_bill.html", bill=bill)
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        if USERS.get(username) == password:
+            session['user'] = username
+            return redirect(url_for('home'))  # or billing dashboard
+        else:
+            flash('Invalid username or password', 'danger')
+    return render_template('login.html')
 
+@app.route('/logout')
+def logout():
+    session.pop('user', None)
+    return redirect(url_for('login'))
 if __name__ == "__main__":
     app.run(debug=False, use_reloader=False)
