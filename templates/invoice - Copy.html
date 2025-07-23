@@ -186,22 +186,41 @@
     });
 
     // 📤 WHATSAPP BUTTON: Capture, Copy, Open WhatsApp
+    document.getElementById("whatsappOnly").addEventListener("click", function (e) {
+        e.preventDefault();
 
-document.getElementById("whatsappOnly").addEventListener("click", async function (e) {
-    e.preventDefault();
+        const customerName = "{{ bill.customer_name }}";
+        const billId = "{{ bill.id }}";
+        const billDateRaw = "{{ bill.formatted_date }}";
+        const safeDate = billDateRaw.replace(/[^a-zA-Z0-9]/g, "-");
+        const fileName = `invoice_${billId}_${safeDate}.png`;
 
-    const customerName = "{{ bill.customer_name }}";
-    const billId = "{{ bill.id }}";
-    const billDateRaw = "{{ bill.formatted_date }}";
-    const safeDate = billDateRaw.replace(/[^a-zA-Z0-9]/g, "-");
-    const fileName = `invoice_${billId}_${safeDate}.png`;
+        const screenOnlyElems = document.querySelectorAll(".screen-only");
+        screenOnlyElems.forEach(el => el.style.display = "none");
 
-    const rawPhone = "{{ bill.customer_phone|replace('+', '') }}";
-    const phoneWithCountry = `91${rawPhone}`;
-    const upiLink = "upi://pay?pa=freshthreads0549@iob&pn=Fresh%20Threads%20Laundry&am={{ '%.2f'|format(final_total) }}&cu=INR";
+        html2canvas(document.querySelector(".invoice-box")).then(canvas => {
+            screenOnlyElems.forEach(el => el.style.display = "");
 
-    const message = encodeURIComponent(`Dear ${customerName}, Thank you for choosing Fresh Threads Laundry & Dry Cleaning Services.
+            // ✅ Copy to clipboard
+            canvas.toBlob(blob => {
+                if (!blob) {
+                    alert("❌ Failed to generate image blob.");
+                    return;
+                }
+                const item = new ClipboardItem({ "image/png": blob });
+                navigator.clipboard.write([item]).then(() => {
+                }).catch(err => {
+                    alert("❌ Clipboard copy failed: " + err);
+                });
+
+                // ✅ Open WhatsApp
+                const rawPhone = "{{ bill.customer_phone|replace('+', '') }}";
+                const phoneWithCountry = `91${rawPhone}`;
+                const upiLink = "upi://pay?pa=freshthreads0549@iob&pn=Fresh%20Threads%20Laundry&am={{ '%.2f'|format(final_total) }}&cu=INR";
+
+                const message = encodeURIComponent(`Dear  ${customerName}, Thank you for choosing Fresh Threads Laundry & Dry Cleaning Services.
 Please find your invoice attached. Should you have any questions, we’re happy to assist.
+
 
 👇👇👇
 To pay via UPI, click this link: ${upiLink}
@@ -210,35 +229,13 @@ To pay via UPI, click this link: ${upiLink}
 👉 www.freshthreadslaundry.co.in
 
 – Fresh Threads Team`);
-
-    const whatsappUrl = `https://wa.me/${phoneWithCountry}?text=${message}`;
-
-    // Hide screen-only elements during capture
-    const screenOnlyElems = document.querySelectorAll(".screen-only");
-    screenOnlyElems.forEach(el => el.style.display = "none");
-
-    try {
-        const canvas = await html2canvas(document.querySelector(".invoice-box"));
-        screenOnlyElems.forEach(el => el.style.display = "");
-
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
-        if (!blob) throw new Error("Failed to generate invoice image");
-
-        const item = new ClipboardItem({ "image/png": blob });
-
-        await navigator.clipboard.write([item]);
-
-        alert("✅ Invoice copied to clipboard.\nNow sending WhatsApp message...");
-        window.open(whatsappUrl, "_blank", "width=800,height=600,noopener,noreferrer");
-
-    } catch (error) {
-        screenOnlyElems.forEach(el => el.style.display = "");
-        alert("❌ Could not copy invoice to clipboard.\nError: " + error.message + "\nYou can still send WhatsApp message.");
-        window.open(whatsappUrl, "_blank", "width=800,height=600,noopener,noreferrer");
-    }
-});
-
-
+                const whatsappUrl = `https://wa.me/${phoneWithCountry}?text=${message}`;
+                window.open(whatsappUrl, "_blank", "width=800,height=600,noopener,noreferrer");
+            });
+        }).catch(error => {
+            alert("❌ Error capturing invoice: " + error);
+        });
+    });
 </script>
 
 </body>
