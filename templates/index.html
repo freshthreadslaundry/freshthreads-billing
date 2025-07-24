@@ -32,8 +32,8 @@
         .table thead th { border-bottom: 1px solid #ddd; }
         .table tfoot td { font-weight: bold; }
         .text-right {
-    text-align: right;
-}
+            text-align: right;
+        }
     </style>
     <script type="text/javascript">
         function disableBack() { window.history.forward(); }
@@ -62,72 +62,74 @@
                     <input class="form-control" name="pickupAddress" placeholder="Pick up Address"/>
                 </div>
                 <div class="col-md-3">
-    <label for="deliveryDate">Delivery Date</label>
-    <input class="form-control" id="deliveryDate" name="deliveryDate" type="date" />
-</div>
+                    <label for="deliveryDate">Delivery Date</label>
+                    <input class="form-control" id="deliveryDate" name="deliveryDate" type="date" />
+                </div>
             </div>
             <div style="display: none;" class="row mb-3"><div class="col-md-3"><label>Pickup Date</label><input class="form-control" name="pickupDate" placeholder="Pickup Date" type="date"/></div></div><table class="table" id="serviceTable">
-<thead>
-  <tr>
-    <th>Service</th>
-    <th>Qty</th>
-    <th>Rate</th>
-    <th>Total</th>
-    <th id="piecesHeader" style="display: none;">Pieces</th> <!-- initially hidden -->
-    <th></th>
-  </tr>
-</thead>
-<tbody>
-<tr>
-  <td><input class="form-control service" name="service[]" type="text" required /></td>
-  <td><input class="form-control qty" name="qty[]" type="number" step="any" value="1" /></td>
-  <td><input class="form-control rate" name="rate[]" type="number" /></td>
-  <td><input class="form-control total" name="total[]" readonly type="number" /></td>
-  <td class="pieces-field" style="display: none;">
-    <input type="number" class="form-control pieces" name="pieces[]" placeholder="Pieces" />
-  </td>
-  <td><button class="btn btn-danger removeRow" type="button">X</button></td>
-</tr>
-
-</tbody>
-
+                <thead>
+                    <tr>
+                        <th>Service</th>
+                        <th>Qty</th>
+                        <th>Rate</th>
+                        <th>Total</th>
+                        <th id="piecesHeader" style="display: none;">Pieces</th> <!-- initially hidden -->
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><input class="form-control service" name="service[]" type="text" required /></td>
+                        <td><input class="form-control qty" name="qty[]" type="number" step="any" value="1" /></td>
+                        <td><input class="form-control rate" name="rate[]" type="number" /></td>
+                        <td><input class="form-control total" name="total[]" readonly type="number" /></td>
+                        <td class="pieces-field" style="display: none;">
+                            <input type="number" class="form-control pieces" name="pieces[]" placeholder="Pieces" />
+                        </td>
+                        <td><button class="btn btn-danger removeRow" type="button">X</button></td>
+                    </tr>
+                    
+                </tbody>
+                
             </table>
             <button class="btn btn-primary" id="addRow" type="button">Add Service</button>
             <div class="row justify-content-end">
                 <div class="col-md-4">
-                    <div class="form-group">
-                        <label for="subTotal">Total</label>
-                        <input type="text" class="form-control text-end" id="subTotal" name="subTotal" readonly >
-                    </div>
-                    <div class="form-group">
-                        <label for="discountValue">Discount</label>
-                        <div class="input-group">
-                            <input type="number" class="form-control text-end" name="discountValue" >
-                            <select name="discountType" class="form-select" style="max-width: 80px;">
-                                <option value="%">%</option>
-                                <option value="Rs">₹</option>
-                            </select>
+                    <div class="card p-3 mb-3 shadow-sm"></div>
+                        <div class="form-group">
+                            <label for="subTotal">Total</label>
+                            <input type="text" class="form-control text-end" id="subTotal" name="subTotal" readonly >
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="totalAmount">Final Amount</label>
-                        <input type="text" class="form-control text-end" name="totalAmount" readonly>
-                    </div>
-                    <div class="form-group" style="display: none;">
-                        <label for="advancePaid">Advance Paid</label>
-                        <input type="number" class="form-control text-end" name="advancePaid" value="0">
-                    </div>
-                    <div class="form-group" style="display: none;">
-                        <label for="balanceAmount">Balance</label>
-                        <input type="text" class="form-control text-end" name="balanceAmount" readonly>
-                    </div>
-                    <div class="mt-3">
-                        <button type="submit" class="btn btn-success mt-2" id="generateBill">Generate Bill</button>
-                    </div>
-                    <div class="form-check mt-3">
-  <input class="form-check-input" type="checkbox" id="isPaid" name="isPaid">
-  <label class="form-check-label" for="isPaid">Paid</label>
-</div>
+                        <div class="form-group">
+                            <label for="discountValue">Discount</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control text-end" name="discountValue" >
+                                <select name="discountType" class="form-select" style="max-width: 80px;">
+                                    <option value="%">%</option>
+                                    <option value="Rs">₹</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="totalAmount">Final Amount</label>
+                            <input type="text" class="form-control text-end" name="totalAmount" readonly>
+                        </div>
+                        <div class="form-group" style="display: none;">
+                            <label for="advancePaid">Advance Paid</label>
+                            <input type="number" class="form-control text-end" name="advancePaid" value="0">
+                        </div>
+                        <div class="form-group" style="display: none;">
+                            <label for="balanceAmount">Balance</label>
+                            <input type="text" class="form-control text-end" name="balanceAmount" readonly>
+                        </div>
+                        <div class="mt-3">
+                            <button type="submit" class="btn btn-success mt-2" id="generateBill">Generate Bill</button>
+                        </div>
+                        <div class="form-check mt-3">
+                            <input class="form-check-input" type="checkbox" id="isPaid" name="isPaid">
+                            <label class="form-check-label" for="isPaid">Paid</label>
+                        </div>
+                    </div>    
                 </div>
             </div>
             
@@ -155,16 +157,16 @@
         
         $(document).ready(function () {
             $(document).on("input", "input[name='service[]']", function () {
-    const row = $(this).closest("tr");
-    checkForKG(row);
-});
+                const row = $(this).closest("tr");
+                checkForKG(row);
+            });
             $(document).on("input", ".qty, .rate", updateTotals);
             $(document).on("input", "input[name='discountValue'], input[name='advancePaid']", updateTotals);
             $(document).on("change", "select[name='discountType']", updateTotals);
             
             // Also recalculate on row add/remove
             $("#addRow").off("click").on("click", function () {
-const $row = $(`
+                const $row = $(`
 <tr>
   <td><input type="text" class="form-control service" name="service[]"></td>
   <td><input type="number" step="any" class="form-control qty" name="qty[]" value="1"></td>
@@ -175,28 +177,28 @@ const $row = $(`
   </td>
   <td><button type="button" class="btn btn-danger removeRow">X</button></td>
 </tr>`);
-$("#serviceTable tbody").append($row);
-checkForKG($row);
-attachServiceAutocomplete($row.find("input[name='service[]']"));
-                    updateTotals();
-                });
+                $("#serviceTable tbody").append($row);
+                checkForKG($row);
+                attachServiceAutocomplete($row.find("input[name='service[]']"));
+                updateTotals();
+            });
+            
+            $(document).on("click", ".removeRow", function () {
+                $(this).closest("tr").remove();
+                updateTotals();
+            });
+            
+            $("#billingForm").submit(function (e) {
+                e.preventDefault();
+                updateTotals();
+                const formData = $(this).serialize();
                 
-                $(document).on("click", ".removeRow", function () {
-                    $(this).closest("tr").remove();
-                    updateTotals();
-                });
-                
-                $("#billingForm").submit(function (e) {
-                    e.preventDefault();
-                    updateTotals();
-                    const formData = $(this).serialize();
-                    
-                    $.post("/api/generate-bill", formData, function (response) {
-                        if (response.success) {
-                            const billId = response.bill_id;
-                            const billDate = response.bill_date;
-                            
-                            let invoiceHTML = `
+                $.post("/api/generate-bill", formData, function (response) {
+                    if (response.success) {
+                        const billId = response.bill_id;
+                        const billDate = response.bill_date;
+                        
+                        let invoiceHTML = `
                 <div class="centered">
                     <h6 class="mb-1">Fresh Threads Laundry & Dry</h6>
                     <h6 class="mb-1">Cleaning Service</h6>
@@ -214,24 +216,24 @@ attachServiceAutocomplete($row.find("input[name='service[]']"));
                 <table class="table table-sm"><thead>
                     <tr><th>Item</th><th>Qty</th><th>Rate</th><th>Total</th></tr>
                 </thead><tbody>`;
+                        
+                        $("#serviceTable tbody tr").each(function () {
+                            const s = $(this).find("input[name='service[]']").val() || "";
+                            const q = $(this).find("input[name='qty[]']").val() || "";
+                            const r = $(this).find("input[name='rate[]']").val() || "";
+                            const t = $(this).find("input[name='total[]']").val() || "";
+                            const p = $(this).find("input[name='pieces[]']").val() || "";
                             
-$("#serviceTable tbody tr").each(function () {
-    const s = $(this).find("input[name='service[]']").val() || "";
-    const q = $(this).find("input[name='qty[]']").val() || "";
-    const r = $(this).find("input[name='rate[]']").val() || "";
-    const t = $(this).find("input[name='total[]']").val() || "";
-    const p = $(this).find("input[name='pieces[]']").val() || "";
-
-    const displayService = s.toLowerCase().includes("kg") && p
-        ? `${s} (${p} pcs)`
-        : s;
-
-    invoiceHTML += `<tr><td>${displayService}</td><td>${q}</td><td>${r}</td><td>${t}</td></tr>`;
-});
-
-
+                            const displayService = s.toLowerCase().includes("kg") && p
+                            ? `${s} (${p} pcs)`
+                            : s;
                             
-                            invoiceHTML += `
+                            invoiceHTML += `<tr><td>${displayService}</td><td>${q}</td><td>${r}</td><td>${t}</td></tr>`;
+                        });
+                        
+                        
+                        
+                        invoiceHTML += `
                 </tbody><tfoot>
                     <tr><td colspan="2">Subtotal</td><td colspan="2">₹${$("input[name='subTotal']").val()}</td></tr>
                     <tr><td colspan="2">Discount</td><td colspan="2">${$("input[name='discountValue']").val()}${$("select[name='discountType']").val()}</td></tr>
@@ -240,21 +242,21 @@ $("#serviceTable tbody tr").each(function () {
                     <tr><td colspan="2">Balance</td><td colspan="2">₹${$("input[name='balanceAmount']").val()}</td></tr>
                 </tfoot></table>
                 <div class="centered mt-3"><p>Thank You! Visit Again!</p>`;
-                            
-                            $("#invoiceContent").html(invoiceHTML);
-                            const modal = new bootstrap.Modal(document.getElementById("invoiceModal"));
-                            modal.show();
-                        } else {
-                            alert("Error generating bill.");
-                        }
-                    });
+                        
+                        $("#invoiceContent").html(invoiceHTML);
+                        const modal = new bootstrap.Modal(document.getElementById("invoiceModal"));
+                        modal.show();
+                    } else {
+                        alert("Error generating bill.");
+                    }
                 });
-                
-                
-                $("#printInvoice").click(function () {
-                    window.print();
-                    $("#billingForm")[0].reset();
-                    $("#serviceTable tbody").html(`
+            });
+            
+            
+            $("#printInvoice").click(function () {
+                window.print();
+                $("#billingForm")[0].reset();
+                $("#serviceTable tbody").html(`
         <tr>
             <td><input class="form-control" name="service[]" type="text"/></td>
             <td><input class="form-control qty" name="qty[]" type="number" value="1"/></td>
@@ -262,138 +264,137 @@ $("#serviceTable tbody tr").each(function () {
             <td><input class="form-control total" name="total[]" readonly type="number"/></td>
             <td><button class="btn btn-danger removeRow" type="button">X</button></td>
         </tr>`);
-                    updateTotals();
-                });
-                
-                
                 updateTotals();
-                
-                // Customer Awesomplete with Map
-                let custInput = document.getElementById("customerPhone");
-                let custAw = new Awesomplete(custInput, { minChars: 1, autoFirst: true });
-                custInput.addEventListener("input", function () {
-                    $.getJSON("/api/customers?q=" + this.value, function (data) {
-                        customerMap = {};
-                        custAw.list = data.map(c => {
-                            customerMap[c.phone] = c;
-                            return `${c.phone} - ${c.name}`;
-                        });
+            });
+            
+            
+            updateTotals();
+            
+            // Customer Awesomplete with Map
+            let custInput = document.getElementById("customerPhone");
+            let custAw = new Awesomplete(custInput, { minChars: 1, autoFirst: true });
+            custInput.addEventListener("input", function () {
+                $.getJSON("/api/customers?q=" + this.value, function (data) {
+                    customerMap = {};
+                    custAw.list = data.map(c => {
+                        customerMap[c.phone] = c;
+                        return `${c.phone} - ${c.name}`;
                     });
                 });
-                custInput.addEventListener("awesomplete-selectcomplete", function (e) {
-                    const selectedPhone = e.text.value.split(" - ")[0];  // ✅ Extract phone number only
-                    console.log("Selected phone:", selectedPhone);
-                    console.log("customerMap:", customerMap);
-                    
-                    const selected = customerMap[selectedPhone];
-                    
-                    if (selected) {
-                        $("input[name='customerPhone']").val(selected.phone);
-                        $("input[name='customerName']").val(selected.name);
-                        $("input[name='emailAddress']").val(selected.email_address);
-                        $("input[name='pickupAddress']").val(selected.address);
-                        $("select[name='customerType']").val(selected.customer_type);
-                    } else {
-                        console.warn("No matching customer for:", selectedPhone);
+            });
+            custInput.addEventListener("awesomplete-selectcomplete", function (e) {
+                const selectedPhone = e.text.value.split(" - ")[0];  // ✅ Extract phone number only
+                console.log("Selected phone:", selectedPhone);
+                console.log("customerMap:", customerMap);
+                
+                const selected = customerMap[selectedPhone];
+                
+                if (selected) {
+                    $("input[name='customerPhone']").val(selected.phone);
+                    $("input[name='customerName']").val(selected.name);
+                    $("input[name='emailAddress']").val(selected.email_address);
+                    $("input[name='pickupAddress']").val(selected.address);
+                    $("select[name='customerType']").val(selected.customer_type);
+                } else {
+                    console.warn("No matching customer for:", selectedPhone);
+                }
+            });
+            
+            function checkForKG($row) {
+                const val = $row.find("input[name='service[]']").val()?.toLowerCase() || "";
+                const piecesCell = $row.find(".pieces-field");
+                
+                if (val.includes("kg")) {
+                    piecesCell.show();
+                } else {
+                    piecesCell.hide();
+                    piecesCell.find("input").val(""); // clear value if not applicable
+                }
+                
+                // Header logic
+                let hasKG = false;
+                $("#serviceTable tbody tr").each(function () {
+                    const s = $(this).find("input[name='service[]']").val()?.toLowerCase() || "";
+                    if (s.includes("kg")) {
+                        hasKG = true;
                     }
                 });
                 
-function checkForKG($row) {
-    const val = $row.find("input[name='service[]']").val()?.toLowerCase() || "";
-    const piecesCell = $row.find(".pieces-field");
-
-    if (val.includes("kg")) {
-        piecesCell.show();
-    } else {
-        piecesCell.hide();
-        piecesCell.find("input").val(""); // clear value if not applicable
-    }
-
-    // Header logic
-    let hasKG = false;
-    $("#serviceTable tbody tr").each(function () {
-        const s = $(this).find("input[name='service[]']").val()?.toLowerCase() || "";
-        if (s.includes("kg")) {
-            hasKG = true;
-        }
-    });
-
-    $("#piecesHeader").toggle(hasKG);
-}
-
-
-
-
-                // Service Awesomplete per row
-                function attachServiceAutocomplete(input) {
-                    let localMap = {};
-                    let aw = new Awesomplete(input[0], { minChars: 1, autoFirst: true });
-                    input.on("input", function () {
-                        $.getJSON("/api/services?q=" + this.value, function (data) {
-                            localMap = {};
-                            aw.list = data.map(s => {
-                                localMap[s.name] = s;
-                                return s.name;
-                            });
+                $("#piecesHeader").toggle(hasKG);
+            }
+            
+            
+            
+            
+            // Service Awesomplete per row
+            function attachServiceAutocomplete(input) {
+                let localMap = {};
+                let aw = new Awesomplete(input[0], { minChars: 1, autoFirst: true });
+                input.on("input", function () {
+                    $.getJSON("/api/services?q=" + this.value, function (data) {
+                        localMap = {};
+                        aw.list = data.map(s => {
+                            localMap[s.name] = s;
+                            return s.name;
                         });
                     });
-                    input[0].addEventListener("awesomplete-selectcomplete", function (e) {
-                        const row = $(this).closest("tr");
-                        const selected = localMap[String(e.text.value)];
-                        console.log("Selected service:", selected);
-                        
-                        if (selected) {
-                            row.find(".rate").val(selected.rate);
-                            updateTotals();
-                        } else {
-                            console.warn("Service not found for:", e.text.value);
-                        }
-                    });
-                }
-                
-attachServiceAutocomplete($("input[name='service[]']").first());
-checkForKG($("#serviceTable tbody tr:first"));
-                $(document).on("input", ".qty, .rate", updateTotals);
-                $(document).on("click", ".removeRow", function () {
-                    $(this).closest("tr").remove();
-                    updateTotals();
                 });
-            });
-            
-            function updateTotals() {
-                let total = 0;
-                let qtyInputs = document.querySelectorAll("input[name='qty[]']");
-                let rateInputs = document.querySelectorAll("input[name='rate[]']");
-                let totalInputs = document.querySelectorAll("input[name='total[]']");
-                
-                for (let i = 0; i < qtyInputs.length; i++) {
-                    let qty = parseFloat(qtyInputs[i].value) || 0;
-                    let rate = parseFloat(rateInputs[i].value) || 0;
-                    let lineTotal = qty * rate;
-                    totalInputs[i].value = lineTotal.toFixed(2);
-                    total += lineTotal;
-                }
-                document.querySelector("input[name='subTotal']").value = total.toFixed(2);
-                let discountVal = parseFloat(document.querySelector("input[name='discountValue']").value) || 0;
-                let discountType = document.querySelector("select[name='discountType']").value;
-                let discountedAmount = (discountType === '%') ? total * (discountVal / 100) : discountVal;
-                let grandTotal = Math.max(0, total - discountedAmount);
-                document.querySelector("input[name='totalAmount']").value = grandTotal.toFixed(2);
-                
-                let advance = parseFloat(document.querySelector("input[name='advancePaid']").value) || 0;
-                let balance = Math.max(0, grandTotal - advance);
-                document.querySelector("input[name='balanceAmount']").value = balance.toFixed(2);
+                input[0].addEventListener("awesomplete-selectcomplete", function (e) {
+                    const row = $(this).closest("tr");
+                    const selected = localMap[String(e.text.value)];
+                    console.log("Selected service:", selected);
+                    
+                    if (selected) {
+                        row.find(".rate").val(selected.rate);
+                        updateTotals();
+                    } else {
+                        console.warn("Service not found for:", e.text.value);
+                    }
+                });
             }
-            const deliveryInput = document.getElementById("deliveryDate");
-if (deliveryInput && !deliveryInput.value) {
-    const today = new Date();
-    today.setDate(today.getDate() + 2);  // T+2
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    deliveryInput.value = `${yyyy}-${mm}-${dd}`;
-}
-        </script>
-    </body>
-    </html>
-    
+            
+            attachServiceAutocomplete($("input[name='service[]']").first());
+            checkForKG($("#serviceTable tbody tr:first"));
+            $(document).on("input", ".qty, .rate", updateTotals);
+            $(document).on("click", ".removeRow", function () {
+                $(this).closest("tr").remove();
+                updateTotals();
+            });
+        });
+        
+        function updateTotals() {
+            let total = 0;
+            let qtyInputs = document.querySelectorAll("input[name='qty[]']");
+            let rateInputs = document.querySelectorAll("input[name='rate[]']");
+            let totalInputs = document.querySelectorAll("input[name='total[]']");
+            
+            for (let i = 0; i < qtyInputs.length; i++) {
+                let qty = parseFloat(qtyInputs[i].value) || 0;
+                let rate = parseFloat(rateInputs[i].value) || 0;
+                let lineTotal = qty * rate;
+                totalInputs[i].value = lineTotal.toFixed(2);
+                total += lineTotal;
+            }
+            document.querySelector("input[name='subTotal']").value = total.toFixed(2);
+            let discountVal = parseFloat(document.querySelector("input[name='discountValue']").value) || 0;
+            let discountType = document.querySelector("select[name='discountType']").value;
+            let discountedAmount = (discountType === '%') ? total * (discountVal / 100) : discountVal;
+            let grandTotal = Math.max(0, total - discountedAmount);
+            document.querySelector("input[name='totalAmount']").value = grandTotal.toFixed(2);
+            
+            let advance = parseFloat(document.querySelector("input[name='advancePaid']").value) || 0;
+            let balance = Math.max(0, grandTotal - advance);
+            document.querySelector("input[name='balanceAmount']").value = balance.toFixed(2);
+        }
+        const deliveryInput = document.getElementById("deliveryDate");
+        if (deliveryInput && !deliveryInput.value) {
+            const today = new Date();
+            today.setDate(today.getDate() + 2);  // T+2
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            deliveryInput.value = `${yyyy}-${mm}-${dd}`;
+        }
+    </script>
+</body>
+</html>
