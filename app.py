@@ -10,12 +10,15 @@ import pdfkit
 import os
 import pandas as pd
 import secrets
+from flask import jsonify
+from flask_cors import CORS
+
 
 
 ADMIN_PASSWORD = "123"  # Change this as needed
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'  # Replace with a strong secret in production
-
+CORS(app, resources={r"/api/*": {"origins": "*"}})  # allow cross-origin calls from Netlify
 # Simple user store (can be expanded later)
 USERS = {
     'admin': 'password123'  # Change this to your preferred username and password
@@ -940,6 +943,30 @@ def customer_view(token):
         final_total=final_total,
     )
 
+@app.route("/api/bill-info/<token>")
+def api_bill_info(token):
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    bill = cur.execute("""
+        SELECT b.*, c.name AS customer_name, c.phone AS customer_phone
+        FROM bills b
+        JOIN customers c ON b.customer_id = c.id
+        WHERE b.token = ?
+    """, (token,)).fetchone()
+
+    if not bill:
+        return jsonify({"error": "Invalid token"}), 404
+
+    status = cur.execute("SELECT payment_status FROM bill_status WHERE bill_id = ?", (bill["id"],)).fetchone()
+    items = cur.execute("SELECT * FROM bill_items WHERE bill_id = ?", (bill["id"],)).fetchall()
+    conn.close()
+
+    return jsonify({
+        "bill": dict(bill),
+        "items": [dict(i) for i in items],
+        "payment_status": status["payment_status"] if status else "Pending"
+    })
 
 @app.route('/logout')
 def logout():
