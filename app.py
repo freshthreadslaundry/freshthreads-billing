@@ -9,8 +9,10 @@ from flask import render_template, send_from_directory
 import pdfkit
 import os
 import pandas as pd
+import secrets
 
-ADMIN_PASSWORD = "fresh@123"  # Change this as needed
+
+ADMIN_PASSWORD = "123"  # Change this as needed
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'  # Replace with a strong secret in production
 
@@ -18,6 +20,9 @@ app.secret_key = 'supersecretkey'  # Replace with a strong secret in production
 USERS = {
     'admin': 'password123'  # Change this to your preferred username and password
 }
+
+def generate_token():
+    return secrets.token_urlsafe(10)  # ~16 char secure URL-safe token
 
 # Decorator to enforce login
 def login_required(f):
@@ -183,18 +188,19 @@ def billing():
         advance_paid = float(data.get("advancePaid") or 0)
         balance_amount = float(data.get("balanceAmount") or 0)
 
+        token = secrets.token_urlsafe(10)
         cur.execute("""
             INSERT INTO bills (
                 customer_id, date, total, pickup_date, pickup_time,
                 delivery_date, dropoff_time, pickup_address,
                 order_type, discount_type, discount_value,
-                advance_paid, balance_amount
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                advance_paid, balance_amount, token
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             customer_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             0, "", "", delivery_date, "", pickup_address,
             order_type, discount_type, discount_value,
-            advance_paid, balance_amount
+            advance_paid, balance_amount, token
         ))
 
         bill_id = cur.lastrowid
@@ -881,10 +887,63 @@ def login():
         else:
             flash('Invalid username or password', 'danger')
     return render_template('login.html')
+@app.route("/pay/<token>")
+def customer_view(token):
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    bill = cur.execute("""
+        SELECT b.*, c.name AS customer_name, c.phone AS customer_phone
+        FROM bills b
+        JOIN customers c ON b.customer_id = c.id
+        WHERE b.token = ?
+    """, (token,)).fetchone()
+
+    if not bill:
+        return "Invalid or expired link", 404
+
+    items = cur.execute("SELECT * FROM bill_items WHERE bill_id = ?", (bill["id"],)).fetchall()
+    status = cur.execute("SELECT payment_status FROM bill_status WHERE bill_id = ?", (bill["id"],)).fetchone()
+    conn.close()
+
+    bill = dict(bill)
+    bill["is_paid"] = status and status["payment_status"] == "Paid"
+
+    # Format dates
+    try:
+        bill['formatted_date'] = datetime.strptime(bill['date'], "%Y-%m-%d %H:%M:%S").strftime("%d-%b-%Y")
+    except:
+        bill['formatted_date'] = bill['date']
+    try:
+        bill['formatted_due_date'] = datetime.strptime(bill['delivery_date'], "%Y-%m-%d").strftime("%d-%b-%Y")
+    except:
+        bill['formatted_due_date'] = bill['delivery_date']
+
+    # Totals
+    subtotal = sum(float(i['qty']) * float(i['rate']) for i in items)
+    discount = float(bill['discount_value'] or 0)
+    discount_amount = subtotal * discount / 100 if bill['discount_type'] == "%" else discount
+    final_total = subtotal - discount_amount
+
+    # Generate QR
+    qr_filename = f"qr_{bill['id']}.png"
+    qr_path = os.path.join("static/qr", qr_filename)
+    generate_upi_qr("freshthreads0549@iob", "Fresh Threads Laundry", final_total, qr_path)
+
+    return render_template(
+        "customer_invoice.html",
+        bill=bill,
+        items=items,
+        qr_image=qr_filename,
+        subtotal=subtotal,
+        discount_amount=discount_amount,
+        final_total=final_total,
+    )
+
 
 @app.route('/logout')
 def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
 if __name__ == "__main__":
-    app.run(debug=False, use_reloader=False)
+    app.run(host='0.0.0.0', port=5000, debug=False)

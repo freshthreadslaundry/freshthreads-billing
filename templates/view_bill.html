@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FreshThreads Bill</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: auto; }
+        .paid { color: green; font-weight: bold; }
+        .pending { color: red; font-weight: bold; }
+        .qr { width: 200px; margin-top: 20px; }
+        button { padding: 10px 20px; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <h2>🧺 FreshThreads Laundry</h2>
+    <p><strong>Customer:</strong> {{ bill['customer_name'] }}</p>
+    <p><strong>Bill ID:</strong> {{ bill['id'] }}</p>
+    <p><strong>Amount:</strong> ₹{{ bill['amount'] }}</p>
+
+    <p><strong>Status:</strong>
+        {% if payment_status == 'Paid' %}
+            <span class="paid">PAID</span>
+        {% else %}
+            <span class="pending">Pending</span>
+        {% endif %}
+    </p>
+
+    {% if payment_status != 'Paid' %}
+    <div id="pay-box"></div>
+    <script>
+        const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+        const upiLink = "upi://pay?pa=freshthreads@upi&pn=FreshThreads&am={{ bill['amount'] }}&cu=INR";
+
+        if (isMobile) {
+            document.getElementById("pay-box").innerHTML = `
+                <button onclick="window.location.href='${upiLink}'">Pay Now</button>
+            `;
+        } else {
+            document.getElementById("pay-box").innerHTML = `
+                <p>Scan this to pay:</p>
+                <img class="qr" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}" />
+            `;
+        }
+    </script>
+    {% endif %}
+</body>
+</html>
