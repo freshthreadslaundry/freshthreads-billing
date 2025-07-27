@@ -200,7 +200,9 @@ document.getElementById("whatsappOnly").addEventListener("click", async function
 
     const rawPhone = "{{ bill.customer_phone|replace('+', '') }}";
     const phoneWithCountry = `91${rawPhone}`;
-    const upiLink = "upi://pay?pa=freshthreads0549@iob&pn=Fresh%20Threads%20Laundry&am={{ '%.2f'|format(final_total) }}&cu=INR";
+    //const upiLink = "upi://pay?pa=freshthreads0549@iob&pn=Fresh%20Threads%20Laundry&am={{ '%.2f'|format(final_total) }}&cu=INR";
+
+    const upiLink = "upi://pay?pa=ramya.kappeta@axisbank";
     const token = "{{ bill.token }}";  // ensure token is passed in context
 
     //To pay via UPI, click this link: ${upiLink}
@@ -209,6 +211,8 @@ document.getElementById("whatsappOnly").addEventListener("click", async function
 Please find your invoice attached. Should you have any questions, we’re happy to assist.
 
 👇👇👇
+
+To pay via UPI, click this link: ${upiLink}
 
 To view and pay your bill: https://freshthreadslaundry.co.in/pay/${token}
 🌐 Checkout our services:
@@ -233,7 +237,7 @@ To view and pay your bill: https://freshthreadslaundry.co.in/pay/${token}
 
         await navigator.clipboard.write([item]);
 
-        alert("✅ Invoice copied to clipboard.\nNow sending WhatsApp message...");
+        //alert("✅ Invoice copied to clipboard.\nNow sending WhatsApp message...");
         window.open(whatsappUrl, "_blank", "width=800,height=600,noopener,noreferrer");
 
     } catch (error) {
