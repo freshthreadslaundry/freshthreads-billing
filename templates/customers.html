@@ -20,7 +20,10 @@
                 <input type="text" name="name" class="form-control" placeholder="Name" required value="{{ edit_customer.name if edit_customer else '' }}">
             </div>
             <div class="col">
-                <input type="text" name="phone" class="form-control" placeholder="Phone" required value="{{ edit_customer.phone if edit_customer else '' }}">
+                <input type="text" name="phone" class="form-control" placeholder="Phone" required 
+       pattern="\S+" title="Phone number cannot contain spaces" 
+       oninput="this.value = this.value.replace(/\s/g, '')"
+       value="{{ edit_customer.phone if edit_customer else '' }}">
             </div>
             <div class="col">
                 <input type="email" name="email_address" class="form-control" placeholder="Email" value="{{ edit_customer.email_address if edit_customer else ' ' }}">

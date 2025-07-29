@@ -51,7 +51,9 @@
         <form method="POST">
             <div class="row mb-3">
                 <div class="col-md-4"><label>Customer Phone</label>
-                    <input class="form-control" id="customerPhone" name="customerPhone" placeholder="Customer Phone" required=""/>
+                    <input class="form-control" id="customerPhone" name="customerPhone" placeholder="Customer Phone" required 
+       pattern="\S+" title="Phone number cannot contain spaces" 
+       oninput="this.value = this.value.replace(/\s/g, '')"/>
                 </div>
                 <div class="col-md-4"><label>Customer Name</label>
                     <input class="form-control" name="customerName" placeholder="Customer Name" required=""/>
