@@ -1,20 +1,39 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Fresh Threads - Record Expenses</title>
+  <title>Fresh Threads - Expenses</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="/static/css/mobile.css">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="https://cdnjs.cloudflare.com/ajax/libs/awesomplete/1.1.5/awesomplete.min.css" rel="stylesheet">
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/awesomplete/1.1.5/awesomplete.min.js"></script>
+  <style>
+    td input, td select {
+      width: 100%;
+    }
+    td.actions {
+      white-space: nowrap;
+    }
+  </style>
 </head>
 <body>
 <div class="container py-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <h2 class="mb-0">💸 Record Multiple Expenses</h2>
+    <h2 class="mb-0">💸 Manage Expenses</h2>
     <a href="/" class="btn btn-outline-secondary">🏠 Home</a>
   </div>
+
+  <form id="filterForm" class="row g-2 mb-3">
+    <div class="col">
+      <label>From:</label>
+      <input type="date" class="form-control" id="startDate" required>
+    </div>
+    <div class="col">
+      <label>To:</label>
+      <input type="date" class="form-control" id="endDate" required>
+    </div>
+    <div class="col d-flex align-items-end">
+      <button class="btn btn-primary w-100" type="submit">🔍 Filter</button>
+    </div>
+  </form>
+
   <form id="expenseForm">
     <table class="table table-bordered" id="expenseTable">
       <thead class="table-light">
@@ -23,106 +42,119 @@
           <th>Amount</th>
           <th>Date</th>
           <th>Notes</th>
-          <th></th>
+          <th class="actions">Actions</th>
         </tr>
       </thead>
       <tbody></tbody>
     </table>
-    <div class="d-flex justify-content-between align-items-center">
-      <button type="button" class="btn btn-sm btn-outline-primary" id="addRowBtn">➕ Add Row</button>
-      <button type="submit" class="btn btn-success">💾 Save All</button>
-    </div>
+    <button type="button" class="btn btn-outline-primary" id="addRowBtn">➕ Add Row</button>
   </form>
 </div>
 
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
 $(document).ready(function () {
   const tableBody = $("#expenseTable tbody");
-  let expenseTypeMap = {};
+  let expenseTypes = [];
 
-  async function fetchAndCacheExpenseTypes() {
-    const res = await $.getJSON("/api/expense-types");
-    res.forEach(t => {
-      expenseTypeMap[t.name.trim().toLowerCase()] = t.id;
+  function todayStr() {
+    return new Date().toISOString().split("T")[0];
+  }
+
+  function buildTypeDropdown(selectedId = null) {
+    const $select = $('<select class="form-select type" required></select>');
+    expenseTypes.forEach(t => {
+      const $opt = $(`<option value="${t.id}">${t.name}</option>`);
+      if (t.id === selectedId) $opt.prop("selected", true);
+      $select.append($opt);
     });
+    return $select;
   }
 
-  function setToday($input) {
-    const today = new Date().toISOString().split("T")[0];
-    $input.val(today);
-  }
+  function addRow(data = {}) {
+    const $row = $("<tr>").attr("data-id", data.id || "");
+    const $type = buildTypeDropdown(data.expense_type_id);
+    const $amount = $('<input type="number" step="0.01" class="form-control amount" required>').val(data.amount || "");
+    const $date = $('<input type="date" class="form-control date" required>').val(data.date || todayStr());
+    const $notes = $('<input class="form-control notes">').val(data.notes || "");
+    const $save = $('<button type="button" class="btn btn-sm btn-success me-2 save-row">💾</button>');
+    const $del = $('<button type="button" class="btn btn-sm btn-danger delete-row">✖</button>');
 
-  function addRow() {
-    const $row = $(`
-      <tr>
-        <td><input class="form-control expenseType" required></td>
-        <td><input type="number" step="0.01" class="form-control amount" required></td>
-        <td><input type="date" class="form-control date" required></td>
-        <td><input class="form-control notes"></td>
-        <td><button type="button" class="btn btn-sm btn-danger remove-row">✖</button></td>
-      </tr>
-    `);
+    $row.append($("<td>").append($type));
+    $row.append($("<td>").append($amount));
+    $row.append($("<td>").append($date));
+    $row.append($("<td>").append($notes));
+    $row.append($("<td class='actions'>").append($save).append($del));
+
     tableBody.append($row);
-    setToday($row.find(".date"));
-
-    const input = $row.find(".expenseType")[0];
-    new Awesomplete(input, {
-      minChars: 1,
-      autoFirst: true,
-      list: Object.keys(expenseTypeMap)
-    });
   }
 
-  $("#addRowBtn").click(addRow);
-  $(document).on("click", ".remove-row", function () {
-    $(this).closest("tr").remove();
-  });
+  async function fetchTypes() {
+    expenseTypes = await $.getJSON("/api/expense-types");
+  }
 
-  fetchAndCacheExpenseTypes().then(() => {
-    addRow(); // Initial row
-  });
+  async function loadExpenses(start, end) {
+    const res = await $.getJSON(`/api/expenses/all?start=${start}&end=${end}`);
+    tableBody.empty();
+    res.forEach(exp => addRow(exp));
+  }
 
-  $("#expenseForm").submit(async function (e) {
+  $("#filterForm").submit(function (e) {
     e.preventDefault();
-    const rows = $("#expenseTable tbody tr");
+    const start = $("#startDate").val();
+    const end = $("#endDate").val();
+    loadExpenses(start, end);
+  });
 
-    for (const row of rows) {
-      const $row = $(row);
-      const typeName = $row.find(".expenseType").val().trim();
-      const amount = $row.find(".amount").val();
-      const date = $row.find(".date").val();
-      const notes = $row.find(".notes").val();
+  $("#addRowBtn").click(() => addRow());
 
-      const typeKey = typeName.toLowerCase();
-      let typeId = expenseTypeMap[typeKey];
+  $(document).on("click", ".save-row", async function () {
+    const $row = $(this).closest("tr");
+    const id = $row.data("id");
+    const payload = {
+      expense_type_id: parseInt($row.find(".type").val()),
+      amount: parseFloat($row.find(".amount").val()),
+      date: $row.find(".date").val(),
+      notes: $row.find(".notes").val()
+    };
 
-      if (!typeId) {
-        const res = await $.post("/api/expense-types", { name: typeName });
-        if (res.success || res.id) {
-          typeId = res.id;
-          expenseTypeMap[typeKey] = typeId;
-        } else {
-          alert("❌ Failed to add type: " + typeName);
-          return;
-        }
-      }
+    const url = id ? `/api/expenses/${id}` : "/api/expenses";
+    const method = id ? "PUT" : "POST";
 
-      const saveRes = await $.post("/api/expenses", {
-        expense_type_id: typeId,
-        amount: amount,
-        date: date,
-        notes: notes
-      });
+    const res = await $.ajax({
+      url: url,
+      method: method,
+      contentType: "application/json",
+      data: JSON.stringify(payload)
+    });
 
-      if (!saveRes.success) {
-        alert("❌ Failed to save expense: " + typeName);
-        return;
-      }
+    if (res.success || res.id) {
+      alert("✅ Saved!");
+      $("#filterForm").submit(); // reload with filters
+    } else {
+      alert("❌ Save failed.");
+    }
+  });
+
+  $(document).on("click", ".delete-row", async function () {
+    const $row = $(this).closest("tr");
+    const id = $row.data("id");
+
+    if (id && !confirm("Delete this expense?")) return;
+
+    if (id) {
+      const res = await $.ajax({ url: `/api/expenses/${id}`, method: "DELETE" });
+      if (!res.success) return alert("❌ Delete failed.");
     }
 
-    alert("✅ All expenses saved successfully");
-    location.reload();
+    $row.remove();
   });
+
+  // Initial setup
+  const today = todayStr();
+  $("#startDate").val(today);
+  $("#endDate").val(today);
+  fetchTypes().then(() => loadExpenses(today, today));
 });
 </script>
 </body>

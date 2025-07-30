@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Manage Expense Types</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    td[contenteditable="true"]:focus {
+      outline: 2px solid #007bff;
+    }
+  </style>
+</head>
+<body class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">📂 Manage Expense Types</h2>
+    <a href="/" class="btn btn-outline-secondary">🏠 Home</a>
+  </div>
+
+  <table class="table table-bordered" id="typesTable">
+    <thead class="table-light">
+      <tr>
+        <th>Name</th>
+        <th style="width: 180px">Actions</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <div class="input-group mt-3">
+    <input type="text" class="form-control" placeholder="New expense type name" id="newTypeInput">
+    <button class="btn btn-primary" id="addTypeBtn">➕ Add</button>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script>
+    function loadTypes() {
+      $.getJSON("/api/expense-types", function(data) {
+        const tbody = $("#typesTable tbody").empty();
+        data.forEach(type => {
+          tbody.append(`
+            <tr data-id="${type.id}">
+              <td contenteditable="true" class="editable-name">${type.name}</td>
+              <td>
+                <button class="btn btn-sm btn-success save-btn">💾 Save</button>
+                <button class="btn btn-sm btn-danger delete-btn">🗑 Delete</button>
+              </td>
+            </tr>
+          `);
+        });
+      });
+    }
+
+    $(document).on("click", ".save-btn", function () {
+      const row = $(this).closest("tr");
+      const id = row.data("id");
+      const name = row.find(".editable-name").text().trim();
+
+      $.ajax({
+        url: `/api/expense-types/${id}`,
+        method: "PUT",
+        data: { name },
+        success: function (res) {
+          if (res.success) loadTypes();
+          else alert("❌ Update failed");
+        }
+      });
+    });
+
+    $(document).on("click", ".delete-btn", function () {
+      const row = $(this).closest("tr");
+      const id = row.data("id");
+      if (!confirm("Are you sure you want to delete this type?")) return;
+
+      $.ajax({
+        url: `/api/expense-types/${id}`,
+        method: "DELETE",
+        success: function (res) {
+          if (res.success) {
+            loadTypes();
+          } else {
+            alert("❌ " + (res.error || "Failed to delete. Possibly in use."));
+          }
+        }
+      });
+    });
+
+    $("#addTypeBtn").click(function () {
+      const name = $("#newTypeInput").val().trim();
+      if (!name) return alert("Enter a name");
+      $.post("/api/expense-types", { name }, function (res) {
+        if (res.success || res.id) {
+          $("#newTypeInput").val("");
+          loadTypes();
+        } else {
+          alert("❌ Failed to add expense type");
+        }
+      });
+    });
+
+    $(document).ready(loadTypes);
+  </script>
+</body>
+</html>

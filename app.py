@@ -759,53 +759,51 @@ def api_range_summary_by_date():
     return jsonify([dict(row) for row in rows])
 
 # === Expense Types ===
+
+
+
 @app.route("/api/expense-types", methods=["GET"])
 def get_expense_types():
-    q = request.args.get("q", "")
+    q = request.args.get("q")
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT id, name FROM expense_types WHERE name LIKE ?", (f"%{q}%",))
+    if q:
+        cur.execute("SELECT id, name FROM expense_types WHERE name LIKE ?", (f"%{q}%",))
+    else:
+        cur.execute("SELECT id, name FROM expense_types ORDER BY name")
     results = [{"id": row["id"], "name": row["name"]} for row in cur.fetchall()]
     conn.close()
     return jsonify(results)
 
+
 @app.route("/api/expense-types", methods=["POST"])
 def add_expense_type():
-    name = request.form.get("name")
+    name = request.form.get("name", "").strip()
     if not name:
-        return jsonify(success=False, error="Missing name")
+        return jsonify(success=False, error="Name required")
 
-    conn = get_db_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("INSERT INTO expense_types (name) VALUES (?)", (name,))
-        conn.commit()
-        id = cur.lastrowid
-        return jsonify(success=True, id=id)
-    except sqlite3.IntegrityError:
-        return jsonify(success=False, error="Expense type already exists")
-    finally:
-        conn.close()
+    db = get_db_connection()
+    cur = db.execute("INSERT INTO expense_types (name) VALUES (?)", (name,))
+    db.commit()
+    return jsonify(success=True, id=cur.lastrowid)
+
 # === Expenses ===
 @app.route("/api/expenses", methods=["POST"])
-def add_expense():
-    expense_type_id = request.form.get("expense_type_id")
-    amount = request.form.get("amount")
-    date = request.form.get("date")
-    notes = request.form.get("notes", "")
-
-    if not all([expense_type_id, amount, date]):
-        return jsonify(success=False, error="Missing fields")
-
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
+def create_expense():
+    data = request.get_json() or request.form
+    db = get_db_connection()
+    cur = db.execute("""
         INSERT INTO expenses (expense_type_id, amount, date, notes)
         VALUES (?, ?, ?, ?)
-    """, (expense_type_id, amount, date, notes))
-    conn.commit()
-    conn.close()
-    return jsonify(success=True)
+    """, (
+        data["expense_type_id"],
+        data["amount"],
+        data["date"],
+        data.get("notes", "")
+    ))
+    db.commit()
+    return jsonify(success=True, id=cur.lastrowid)
+
 @app.route("/expenses")
 @login_required
 def expenses_page():
@@ -967,6 +965,75 @@ def api_bill_info(token):
         "items": [dict(i) for i in items],
         "payment_status": status["payment_status"] if status else "Pending"
     })
+
+@app.route("/api/expense-types/<int:type_id>", methods=["PUT"])
+def update_expense_type(type_id):
+    name = request.form.get("name")
+    db = get_db_connection()
+    db.execute("UPDATE expense_types SET name = ? WHERE id = ?", (name, type_id))
+    db.commit()
+    return jsonify(success=True)
+
+@app.route("/api/expense-types/<int:type_id>", methods=["DELETE"])
+def delete_expense_type(type_id):
+    db = get_db_connection()
+    used = db.execute("SELECT COUNT(*) FROM expenses WHERE expense_type_id = ?", (type_id,)).fetchone()[0]
+    if used > 0:
+        return jsonify(success=False, error="This type is in use and cannot be deleted")
+    db.execute("DELETE FROM expense_types WHERE id = ?", (type_id,))
+    db.commit()
+    return jsonify(success=True)
+
+@app.route("/api/expenses/<int:expense_id>", methods=["PUT"])
+def update_expense(expense_id):
+    data = request.get_json()
+    db = get_db_connection()
+    db.execute("""
+        UPDATE expenses
+        SET expense_type_id = ?, amount = ?, date = ?, notes = ?
+        WHERE id = ?
+    """, (
+        data["expense_type_id"],
+        data["amount"],
+        data["date"],
+        data.get("notes", ""),
+        expense_id
+    ))
+    db.commit()
+    return jsonify(success=True)
+
+
+@app.route("/api/expenses/<int:expense_id>", methods=["DELETE"])
+def delete_expense(expense_id):
+    db = get_db_connection()
+    db.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
+    db.commit()
+    return jsonify(success=True)
+
+@app.route("/expense-types")
+def expense_types_page():
+    return render_template("expense_types.html")
+
+@app.route("/api/expenses/all")
+def get_expenses_by_date():
+    start = request.args.get("start")
+    end = request.args.get("end")
+    if not start or not end:
+        return jsonify([])
+
+    db = get_db_connection()
+    rows = db.execute("""
+        SELECT e.id, e.amount, e.date, e.notes,
+               e.expense_type_id, t.name AS type_name
+        FROM expenses e
+        JOIN expense_types t ON e.expense_type_id = t.id
+        WHERE e.date BETWEEN ? AND ?
+        ORDER BY e.date DESC
+    """, (start, end)).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+
 
 @app.route('/logout')
 def logout():
