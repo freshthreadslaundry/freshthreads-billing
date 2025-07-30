@@ -108,33 +108,39 @@ $(document).ready(function () {
 
   $("#addRowBtn").click(() => addRow());
 
-  $(document).on("click", ".save-row", async function () {
-    const $row = $(this).closest("tr");
-    const id = $row.data("id");
-    const payload = {
-      expense_type_id: parseInt($row.find(".type").val()),
-      amount: parseFloat($row.find(".amount").val()),
-      date: $row.find(".date").val(),
-      notes: $row.find(".notes").val()
-    };
+$(document).on("click", ".save-row", async function () {
+  const $btn = $(this);
+  const $row = $btn.closest("tr");
+  const id = $row.data("id");
 
-    const url = id ? `/api/expenses/${id}` : "/api/expenses";
-    const method = id ? "PUT" : "POST";
+  const payload = {
+    expense_type_id: parseInt($row.find(".type").val()),
+    amount: parseFloat($row.find(".amount").val()),
+    date: $row.find(".date").val(),
+    notes: $row.find(".notes").val()
+  };
 
-    const res = await $.ajax({
-      url: url,
-      method: method,
-      contentType: "application/json",
-      data: JSON.stringify(payload)
-    });
+  const url = id ? `/api/expenses/${id}` : "/api/expenses";
+  const method = id ? "PUT" : "POST";
 
-    if (res.success || res.id) {
-      alert("✅ Saved!");
-      $("#filterForm").submit(); // reload with filters
-    } else {
-      alert("❌ Save failed.");
-    }
+  const res = await $.ajax({
+    url: url,
+    method: method,
+    contentType: "application/json",
+    data: JSON.stringify(payload)
   });
+
+  if (res.success || res.id) {
+    if (!id && res.id) {
+      $row.attr("data-id", res.id); // assign new ID to row
+    }
+    $btn.prop("disabled", true).text("✅"); // disable & show success
+  } else {
+    alert("❌ Save failed.");
+  }
+});
+
+
 
   $(document).on("click", ".delete-row", async function () {
     const $row = $(this).closest("tr");
