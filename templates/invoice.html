@@ -200,9 +200,9 @@ document.getElementById("whatsappOnly").addEventListener("click", async function
 
     const rawPhone = "{{ bill.customer_phone|replace('+', '') }}";
     const phoneWithCountry = `91${rawPhone}`;
-    //const upiLink = "upi://pay?pa=freshthreads0549@iob&pn=Fresh%20Threads%20Laundry&am={{ '%.2f'|format(final_total) }}&cu=INR";
+    const upiLink = "upi://pay?pa=freshthreads0549@iob&pn=Fresh%20Threads%20Laundry&am={{ '%.2f'|format(final_total) }}&cu=INR";
 
-    const upiLink = "upi://pay?pa=ramya.kappeta@axisbank";
+    //const upiLink = "upi://pay?pa=ramya.kappeta@axisbank";
     const token = "{{ bill.token }}";  // ensure token is passed in context
 
     //To pay via UPI, click this link: ${upiLink}
@@ -219,7 +219,7 @@ www.freshthreadslaundry.co.in
 We’d love your feedback! Please leave us a quick Google review:
 https://search.google.com/local/writereview?placeid=ChIJhygIcNqTyzsRyswovWgodWQ
 
-– Fresh Threads Team`);
+FreshThreads 🙏`);
 
     const whatsappUrl = `https://wa.me/${phoneWithCountry}?text=${message}`;
 
