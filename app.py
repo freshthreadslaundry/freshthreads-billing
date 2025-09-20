@@ -294,7 +294,8 @@ def bill_view(bill_id):
         abort(404)
 
     bill = dict(row)
-
+    bill_is_cancelled = bool(bill.get("void")) and int(bill.get("void")) == 1
+    bill["is_cancelled"] = bill_is_cancelled
     # Format date
     try:
         dt = datetime.strptime(bill['date'], "%Y-%m-%d %H:%M:%S")

@@ -495,10 +495,38 @@ document.getElementById("runOutstandingBtn").addEventListener("click", async fun
                                         return res.text();
                                     })
                                     .then(html => {
-                                        document.getElementById("billPreviewContent").innerHTML = html;
-                                        document.getElementById("cancelBillBtn").dataset.billId = billId;
-                                        new bootstrap.Modal(document.getElementById("billPreviewModal")).show();
-                                    })
+  const modalBody = document.getElementById("billPreviewContent");
+  const cancelBtn = document.getElementById("cancelBillBtn");
+
+  // Inject the preview HTML
+  modalBody.innerHTML = html;
+
+  // Build a DOM we can query (only the EMBED html, not the whole page)
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+
+  // Robust detection of a cancelled bill
+  const hasCancelledElement =
+    tmp.querySelector(
+      "[data-status='cancelled'], [data-cancelled='true'], .status-cancelled, .badge-cancelled, .cancelled, .alert-danger, .badge.bg-danger"
+    ) !== null;
+
+  const hasCancelledText = /cancelled/i.test(tmp.textContent || "");
+
+  if (hasCancelledElement || hasCancelledText) {
+    // Hide the cancel button for already-cancelled bills
+    cancelBtn.classList.add("d-none");
+    cancelBtn.removeAttribute("data-bill-id");
+  } else {
+    // Show & wire the cancel button for active bills
+    cancelBtn.classList.remove("d-none");
+    cancelBtn.dataset.billId = document.getElementById("cancelBillId").value;
+  }
+
+  new bootstrap.Modal(document.getElementById("billPreviewModal")).show();
+})
+
+
                                     .catch(err => {
                                         console.error(err);
                                         alert(err);

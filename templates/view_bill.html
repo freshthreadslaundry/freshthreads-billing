@@ -7,6 +7,7 @@
         body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: auto; }
         .paid { color: green; font-weight: bold; }
         .pending { color: red; font-weight: bold; }
+        .cancelled { color: #fff; background: red; padding: 8px 12px; display: inline-block; border-radius: 5px; font-weight: bold; }
         .qr { width: 200px; margin-top: 20px; }
         button { padding: 10px 20px; font-size: 16px; }
     </style>
@@ -17,31 +18,39 @@
     <p><strong>Bill ID:</strong> {{ bill['id'] }}</p>
     <p><strong>Amount:</strong> ₹{{ bill['amount'] }}</p>
 
-    <p><strong>Status:</strong>
-        {% if payment_status == 'Paid' %}
-            <span class="paid">PAID</span>
-        {% else %}
-            <span class="pending">Pending</span>
+    {% if bill['is_cancelled'] %}
+        <!-- 🚫 Cancelled banner -->
+        <p><span class="cancelled">❌ CANCELLED</span></p>
+    {% else %}
+        <p><strong>Status:</strong>
+            {% if payment_status == 'Paid' %}
+                <span class="paid">PAID</span>
+            {% else %}
+                <span class="pending">Pending</span>
+            {% endif %}
+        </p>
+
+        {% if payment_status != 'Paid' %}
+        <div id="pay-box"></div>
+        <script>
+            const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
+            const upiLink = "upi://pay?pa=freshthreads@upi&pn=FreshThreads&am={{ bill['amount'] }}&cu=INR";
+
+            if (isMobile) {
+                document.getElementById("pay-box").innerHTML = `
+                    <button onclick="window.location.href='${upiLink}'">Pay Now</button>
+                `;
+            } else {
+                document.getElementById("pay-box").innerHTML = `
+                    <p>Scan this to pay:</p>
+                    <img class="qr" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}" />
+                `;
+            }
+        </script>
         {% endif %}
-    </p>
 
-    {% if payment_status != 'Paid' %}
-    <div id="pay-box"></div>
-    <script>
-        const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
-        const upiLink = "upi://pay?pa=freshthreads@upi&pn=FreshThreads&am={{ bill['amount'] }}&cu=INR";
-
-        if (isMobile) {
-            document.getElementById("pay-box").innerHTML = `
-                <button onclick="window.location.href='${upiLink}'">Pay Now</button>
-            `;
-        } else {
-            document.getElementById("pay-box").innerHTML = `
-                <p>Scan this to pay:</p>
-                <img class="qr" src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(upiLink)}" />
-            `;
-        }
-    </script>
+        <!-- Example edit button (only if bill is not cancelled) -->
+        <p><a href="/edit/{{ bill['id'] }}"><button>Edit Bill</button></a></p>
     {% endif %}
 </body>
 </html>
