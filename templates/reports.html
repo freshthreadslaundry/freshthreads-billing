@@ -2,7 +2,7 @@
 <html>
 <head>
   <title>Reports - Fresh Threads</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/static/css/mobile.css">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
@@ -38,7 +38,7 @@
       <h2 class="fw-bold text-primary mb-0">📊 Reports Dashboard</h2>
       <a class="btn btn-outline-secondary" href="/">🏠 Home</a>
     </div>
-
+    
     <!-- Sales Report Section -->
     <div class="card mb-3 shadow-sm">
       <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#salesSection" role="button" aria-expanded="false">
@@ -65,7 +65,7 @@
         </div>
       </div>
     </div>
-
+    
     <!-- Daily Detail Report Section -->
     <div class="card mb-3 shadow-sm">
       <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#dailySection" role="button" aria-expanded="false">
@@ -86,7 +86,7 @@
         </div>
       </div>
     </div>
-
+    
     <!-- Outstanding Report Section -->
     <div class="card mb-3 shadow-sm">
       <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#outstandingSection" role="button" aria-expanded="false">
@@ -99,7 +99,7 @@
         </div>
       </div>
     </div>
-
+    
     <!-- View and Cancel Bill Section -->
     <div class="card mb-3 shadow-sm">
       <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#viewCancelSection" role="button" aria-expanded="false">
@@ -127,7 +127,7 @@
         </div>
       </div>
     </div>
-
+    
     <!-- Expense Report Section -->
     <div class="card mb-3 shadow-sm">
       <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#expenseSection" role="button" aria-expanded="false">
@@ -144,7 +144,7 @@
         </div>
       </div>
     </div>
-
+    
     <!-- Summary Section -->
     <div class="row mb-3">
       <div class="col">
@@ -156,7 +156,7 @@
         </div>
       </div>
     </div>
-
+    
     <!-- Detailed Report Results Section -->
     <div id="reportResults" class="mt-4"></div>
     <div class="card mt-3">
@@ -165,90 +165,90 @@
       </div>
     </div>
   </div>
-    <!-- Preview Modal -->
-    <div aria-hidden="true" aria-labelledby="billPreviewModalLabel" class="modal fade" id="billPreviewModal" tabindex="-1">
-        <div class="modal-dialog modal-xl modal-dialog-centered modal-scrollable">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="billPreviewModalLabel">Bill Preview</h5>
-                    <button aria-label="Close" class="btn-close" data-bs-dismiss="modal" type="button"></button>
-                </div>
-                <div class="modal-body" id="billPreviewContent">
-                    <!-- Bill content will load here -->
-                </div>
-                <div class="modal-footer">
-                    <button class="btn btn-danger" id="cancelBillBtn" type="button">Confirm Cancel</button>
-                    <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">Close</button>
-                </div>
-            </div>
+  <!-- Preview Modal -->
+  <div aria-hidden="true" aria-labelledby="billPreviewModalLabel" class="modal fade" id="billPreviewModal" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="billPreviewModalLabel">Bill Preview</h5>
+          <button aria-label="Close" class="btn-close" data-bs-dismiss="modal" type="button"></button>
         </div>
+        <div class="modal-body" id="billPreviewContent">
+          <!-- Bill content will load here -->
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-danger" id="cancelBillBtn" type="button">Confirm Cancel</button>
+          <button class="btn btn-secondary" data-bs-dismiss="modal" type="button">Close</button>
+        </div>
+      </div>
     </div>
-    <div id="passwordModal" style="display:none; position:fixed; top:30%; left:50%; transform:translate(-50%, -50%); background:#fff; padding:20px; border:1px solid #ccc; box-shadow:0 0 10px #aaa; z-index:1050;">
+  </div>
+  <div id="passwordModal" style="display:none; position:fixed; top:30%; left:50%; transform:translate(-50%, -50%); background:#fff; padding:20px; border:1px solid #ccc; box-shadow:0 0 10px #aaa; z-index:1050;">
     <label id="passwordPromptLabel" for="adminPassword">Enter admin password:</label><br>
     <input type="password" id="adminPassword" class="form-control mt-2"><br>
     <div class="d-flex justify-content-end gap-2 mt-2">
-        <button class="btn btn-primary" onclick="submitPassword()">OK</button>
-        <button class="btn btn-secondary" onclick="closePasswordModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitPassword()">OK</button>
+      <button class="btn btn-secondary" onclick="closePasswordModal()">Cancel</button>
     </div>
-</div>
-    <script>
-function checkAdminPassword(promptText = "Enter admin password:") {
-    return new Promise(resolve => {
+  </div>
+  <script>
+    function checkAdminPassword(promptText = "Enter admin password:") {
+      return new Promise(resolve => {
         const modal = document.getElementById("passwordModal");
         const input = document.getElementById("adminPassword");
         const label = document.getElementById("passwordPromptLabel");
-
+        
         modal.style.display = "block";
         label.textContent = promptText;
         input.value = "";
         input.focus();
-
+        
         window.submitPassword = async function () {
-            const password = input.value;
-            closePasswordModal();
-
-            if (!password) return resolve(false);
-
-            const res = await fetch("/api/verify-password", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ password })
-            });
-
-            const result = await res.json();
-            if (!result.success) {
-                alert("Access denied. Incorrect password.");
-                return resolve(false);
-            }
-
-            return resolve(true);
+          const password = input.value;
+          closePasswordModal();
+          
+          if (!password) return resolve(false);
+          
+          const res = await fetch("/api/verify-password", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ password })
+          });
+          
+          const result = await res.json();
+          if (!result.success) {
+            alert("Access denied. Incorrect password.");
+            return resolve(false);
+          }
+          
+          return resolve(true);
         };
-
+        
         window.closePasswordModal = function () {
-            modal.style.display = "none";
+          modal.style.display = "none";
         };
-    });
-}
-
-function loadOutstandingReportWithoutPassword() {
-
-    const old = document.getElementById("resultsTable");
-    if (old) old.remove();
-    document.getElementById("reportResults").innerHTML = "";
+      });
+    }
     
-
-    fetch("/outstanding_summary")
-        .then(res => res.json())
-        .then(data => updateSummaryBox(data, "outstanding"));
-
-    fetch("/api/outstanding-report")
-        .then(res => res.json())
-        .then(data => {
-            let html = `<h4>Outstanding Report</h4>`;
-            if (!data.length) {
-                html += '<p>No outstanding bills.</p>';
-            } else {
-                html += `<table class="table table-sm table-bordered mt-3">
+    function loadOutstandingReportWithoutPassword() {
+      
+      const old = document.getElementById("resultsTable");
+      if (old) old.remove();
+      document.getElementById("reportResults").innerHTML = "";
+      
+      
+      fetch("/outstanding_summary")
+      .then(res => res.json())
+      .then(data => updateSummaryBox(data, "outstanding"));
+      
+      fetch("/api/outstanding-report")
+      .then(res => res.json())
+      .then(data => {
+        let html = `<h4>Outstanding Report</h4>`;
+        if (!data.length) {
+          html += '<p>No outstanding bills.</p>';
+        } else {
+          html += `<table class="table table-sm table-bordered mt-3">
                     <thead>
                         <tr>
                             <th>Bill ID</th>
@@ -262,8 +262,8 @@ function loadOutstandingReportWithoutPassword() {
                         </tr>
                     </thead>
                     <tbody>`;
-                for (const row of data) {
-                    html += `<tr>
+            for (const row of data) {
+              html += `<tr>
                         <td><a href="/bill/${row.bill_id}" target="_blank">#${row.bill_id}</a></td>
                         <td>${row.customer_name}</td>
                         <td>${row.customer_phone}</td>
@@ -277,49 +277,49 @@ function loadOutstandingReportWithoutPassword() {
                             ${row.delivery_status === 'Delivered' ? '✅ Delivered' : `<button class='btn btn-sm btn-outline-primary' onclick='markDelivered(${row.bill_id})'>Mark Delivered</button>`}
                         </td>
                     </tr>`;
-                }
-                html += '</tbody></table>';
+              }
+              html += '</tbody></table>';
             }
-
+            
             document.getElementById("reportResults").innerHTML = html;
-        });
-}
-
+          });
+        }
+        
         document.addEventListener("DOMContentLoaded", function () {
+          
+          function formatDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = date.toLocaleString('en-US', { month: 'short' });
+            const year = String(date.getFullYear()).slice(-2);
+            return `${day}-${month}-${year}`;
+          }
+          
+          function setTodayIfEmpty(id) {
+            const el = document.getElementById(id);
+            if (el && !el.value) {
+              const today = new Date();
+              const yyyy = today.getFullYear();
+              const mm = String(today.getMonth() + 1).padStart(2, '0');
+              const dd = String(today.getDate()).padStart(2, '0');
+              el.value = `${yyyy}-${mm}-${dd}`;
+            }
+          }
+          function updateSummaryBox(data, mode = "outstanding") {
+            let left1 = '', left2 = '', right1 = '', right2 = '';
             
-            function formatDate(dateStr) {
-                if (!dateStr) return '';
-                const date = new Date(dateStr);
-                const day = String(date.getDate()).padStart(2, '0');
-                const month = date.toLocaleString('en-US', { month: 'short' });
-                const year = String(date.getFullYear()).slice(-2);
-                return `${day}-${month}-${year}`;
+            if (mode === "outstanding") {
+              left1 = `Pending Deliveries Today: <span class="text-dark">${data.pending_today ?? '-'}</span>`;
+              left2 = `Pending Deliveries Tomorrow: <span class="text-dark">${data.pending_tomorrow ?? '-'}</span>`;
+              right1 = `Pending Payments: <span class="text-dark">${data.pending_payment_count ?? '-'}</span>`;
+              right2 = `Total Pending Amount: ₹<span class="text-dark">${data.pending_amount ?? '-'}</span>`;
+            } else if (mode === "daily") {
+              left1 = `Total Bills: <span class="text-dark">${data.total_bills ?? '-'}</span>`;
+              right1 = `Total Sales: ₹<span class="text-dark">${data.total_sales ?? '-'}</span>`;
             }
             
-            function setTodayIfEmpty(id) {
-                const el = document.getElementById(id);
-                if (el && !el.value) {
-                    const today = new Date();
-                    const yyyy = today.getFullYear();
-                    const mm = String(today.getMonth() + 1).padStart(2, '0');
-                    const dd = String(today.getDate()).padStart(2, '0');
-                    el.value = `${yyyy}-${mm}-${dd}`;
-                }
-            }
-function updateSummaryBox(data, mode = "outstanding") {
-    let left1 = '', left2 = '', right1 = '', right2 = '';
-
-    if (mode === "outstanding") {
-        left1 = `Pending Deliveries Today: <span class="text-dark">${data.pending_today ?? '-'}</span>`;
-        left2 = `Pending Deliveries Tomorrow: <span class="text-dark">${data.pending_tomorrow ?? '-'}</span>`;
-        right1 = `Pending Payments: <span class="text-dark">${data.pending_payment_count ?? '-'}</span>`;
-        right2 = `Total Pending Amount: ₹<span class="text-dark">${data.pending_amount ?? '-'}</span>`;
-    } else if (mode === "daily") {
-        left1 = `Total Bills: <span class="text-dark">${data.total_bills ?? '-'}</span>`;
-        right1 = `Total Sales: ₹<span class="text-dark">${data.total_sales ?? '-'}</span>`;
-    }
-
-    document.getElementById("summary-content").innerHTML = `
+            document.getElementById("summary-content").innerHTML = `
         <h5 class="card-title">Summary</h5>
         <div class="row">
             <div class="col-md-6">
@@ -332,46 +332,46 @@ function updateSummaryBox(data, mode = "outstanding") {
             </div>
         </div>
     `;
-}
-            ["start", "end", "dailyDate", "deliveryDate"].forEach(setTodayIfEmpty);
-            const expStartInput = document.getElementById("expStart");
-const expEndInput = document.getElementById("expEnd");
-
-const today = new Date();
-const yesterday = new Date(today);
-yesterday.setDate(today.getDate() - 1);
-
-const format = (d) => d.toISOString().split("T")[0];
-
-if (expStartInput && !expStartInput.value) expStartInput.value = format(yesterday);
-if (expEndInput && !expEndInput.value) expEndInput.value = format(today);
-
+          }
+          ["start", "end", "dailyDate", "deliveryDate"].forEach(setTodayIfEmpty);
+          const expStartInput = document.getElementById("expStart");
+          const expEndInput = document.getElementById("expEnd");
+          
+          const today = new Date();
+          const yesterday = new Date(today);
+          yesterday.setDate(today.getDate() - 1);
+          
+          const format = (d) => d.toISOString().split("T")[0];
+          
+          if (expStartInput && !expStartInput.value) expStartInput.value = format(yesterday);
+          if (expEndInput && !expEndInput.value) expEndInput.value = format(today);
+          
+          
+          document.getElementById("runDailyBtn").addEventListener("click", function () {
+            const date = document.getElementById("dailyDate").value;
+            if (!date) return alert("Please select a date");
+            fetch(`/api/summary-daily?date=${date}`)
+            .then(res => res.json())
+            .then(data => {
+              updateSummaryBox(data, "daily");
+            });
+            // 🔥 CLEAR ANY PREVIOUS REPORTS
+            const old = document.getElementById("resultsTable");
+            if (old) old.remove();
+            document.getElementById("reportResults").innerHTML = "";
+            document.getElementById("expenseReportTable").innerHTML = "";
             
-            document.getElementById("runDailyBtn").addEventListener("click", function () {
-                const date = document.getElementById("dailyDate").value;
-                if (!date) return alert("Please select a date");
-fetch(`/api/summary-daily?date=${date}`)
-    .then(res => res.json())
-    .then(data => {
- updateSummaryBox(data, "daily");
-    });
-                // 🔥 CLEAR ANY PREVIOUS REPORTS
-                const old = document.getElementById("resultsTable");
-                if (old) old.remove();
-                document.getElementById("reportResults").innerHTML = "";
-                document.getElementById("expenseReportTable").innerHTML = "";
-
-                fetch(`/api/daily-report?date=${date}`)
-                .then(res => res.json())
-                .then(data => {
-                    let html = `<div class="d-flex justify-content-between align-items-center">
+            fetch(`/api/daily-report?date=${date}`)
+            .then(res => res.json())
+            .then(data => {
+              let html = `<div class="d-flex justify-content-between align-items-center">
                             <h4>Daily Report for ${date}</h4>
                             <a href="/reports/export-daily?date=${date}" class="btn btn-success">Export to Excel</a>
                         </div>`;
-                        if (!data.length) {
-                            html += '<p>No records found.</p>';
-                        } else {
-                            html += `<table class="table table-sm table-bordered mt-3">
+                if (!data.length) {
+                  html += '<p>No records found.</p>';
+                } else {
+                  html += `<table class="table table-sm table-bordered mt-3">
                     <thead>
                         <tr>
                             <th>Bill ID</th>
@@ -387,10 +387,10 @@ fetch(`/api/summary-daily?date=${date}`)
                         </tr>
                     </thead>
                     <tbody>`;
-                                let lastBillId = null;
-for (const row of data) {
-    const showBillId = row.bill_id !== lastBillId;
-    html += `<tr>
+                    let lastBillId = null;
+                    for (const row of data) {
+                      const showBillId = row.bill_id !== lastBillId;
+                      html += `<tr>
         <td>${showBillId ? `<a href="/bill/${row.bill_id}" target="_blank">#${row.bill_id}</a>` : ''}</td>
         <td>${showBillId ? row.customer_name : ''}</td>
         <td>${showBillId ? row.customer_phone : ''}</td>
@@ -406,43 +406,43 @@ for (const row of data) {
             ${showBillId ? (row.delivery_status === 'Delivered' ? '✅ Delivered' : '❌ Not Delivered') : ''}
         </td>
     </tr>`;
-    lastBillId = row.bill_id;
-}
-
-                                    html += '</tbody></table>';
-                                }
-                                document.getElementById("reportResults").innerHTML = html;
-                            });
-                        });
-                        
-document.getElementById("runOutstandingBtn").addEventListener("click", async function () {
-    const ok = await checkAdminPassword("Enter admin password to view Outstanding Report:");
-    if (!ok) return;
-
-    const date = document.getElementById("dailyDate").value;
-    if (!date) return alert("Please select a date");
-
-    // 🔥 CLEAR ANY PREVIOUS REPORTS
-    const old = document.getElementById("resultsTable");
-    if (old) old.remove();
-    document.getElementById("reportResults").innerHTML = "";
-    document.getElementById("expenseReportTable").innerHTML = "";
-    // ✅ Fetch and populate outstanding summary
-    fetch("/outstanding_summary")
-        .then(res => res.json())
-        .then(data => {
-            updateSummaryBox(data, "outstanding");
-        });
-
-    // 🔄 Load detailed outstanding report
-    fetch("/api/outstanding-report")
-        .then(res => res.json())
-        .then(data => {
-            let html = `<h4>Outstanding Report</h4>`;
-            if (!data.length) {
-                html += '<p>No outstanding bills.</p>';
-            } else {
-                html += `<table class="table table-sm table-bordered mt-3">
+                        lastBillId = row.bill_id;
+                      }
+                      
+                      html += '</tbody></table>';
+                    }
+                    document.getElementById("reportResults").innerHTML = html;
+                  });
+                });
+                
+                document.getElementById("runOutstandingBtn").addEventListener("click", async function () {
+                  const ok = await checkAdminPassword("Enter admin password to view Outstanding Report:");
+                  if (!ok) return;
+                  
+                  const date = document.getElementById("dailyDate").value;
+                  if (!date) return alert("Please select a date");
+                  
+                  // 🔥 CLEAR ANY PREVIOUS REPORTS
+                  const old = document.getElementById("resultsTable");
+                  if (old) old.remove();
+                  document.getElementById("reportResults").innerHTML = "";
+                  document.getElementById("expenseReportTable").innerHTML = "";
+                  // ✅ Fetch and populate outstanding summary
+                  fetch("/outstanding_summary")
+                  .then(res => res.json())
+                  .then(data => {
+                    updateSummaryBox(data, "outstanding");
+                  });
+                  
+                  // 🔄 Load detailed outstanding report
+                  fetch("/api/outstanding-report")
+                  .then(res => res.json())
+                  .then(data => {
+                    let html = `<h4>Outstanding Report</h4>`;
+                    if (!data.length) {
+                      html += '<p>No outstanding bills.</p>';
+                    } else {
+                      html += `<table class="table table-sm table-bordered mt-3">
                     <thead>
                         <tr>
                             <th>Bill ID</th>
@@ -456,8 +456,8 @@ document.getElementById("runOutstandingBtn").addEventListener("click", async fun
                         </tr>
                     </thead>
                     <tbody>`;
-                for (const row of data) {
-                    html += `<tr>
+                        for (const row of data) {
+                          html += `<tr>
                         <td><a href="/bill/${row.bill_id}" target="_blank">#${row.bill_id}</a></td>
                         <td>${row.customer_name}</td>
                         <td>${row.customer_phone}</td>
@@ -471,155 +471,153 @@ document.getElementById("runOutstandingBtn").addEventListener("click", async fun
                             ${row.delivery_status === 'Delivered' ? '✅ Delivered' : `<button class='btn btn-sm btn-outline-primary' onclick='markDelivered(${row.bill_id})'>Mark Delivered</button>`}
                         </td>
                     </tr>`;
-                }
-                html += '</tbody></table>';
-            }
-            document.getElementById("reportResults").innerHTML = html;
-        });
-});
-
-                                
-                                document.getElementById("viewBillBtn").addEventListener("click", function () {
-                                    const billId = document.getElementById("viewBillId").value;
-                                    if (!billId) return alert("Please enter a Bill ID");
-                                    window.open(`/bill/${billId}`, '_blank');
-                                });
-                                
-                                document.getElementById("previewBillBtn").addEventListener("click", function () {
-                                    const billId = document.getElementById("cancelBillId").value;
-                                    if (!billId) return alert("Please enter a Bill ID");
-                                    
-                                    fetch(`/bill/${billId}/embed`)
-                                    .then(res => {
-                                        if (!res.ok) throw new Error("Bill not found");
-                                        return res.text();
-                                    })
-                                    .then(html => {
+                          }
+                          html += '</tbody></table>';
+                        }
+                        document.getElementById("reportResults").innerHTML = html;
+                      });
+                    });
+                    
+                    
+                    document.getElementById("viewBillBtn").addEventListener("click", function () {
+                      const billId = document.getElementById("viewBillId").value;
+                      if (!billId) return alert("Please enter a Bill ID");
+                      window.open(`/bill/${billId}`, '_blank');
+                    });
+                    
+                    document.getElementById("previewBillBtn").addEventListener("click", function () {
+                      const billId = document.getElementById("cancelBillId").value;
+                      if (!billId) return alert("Please enter a Bill ID");
+                      
+                      fetch(`/bill/${billId}/embed`)
+                      .then(res => {
+                        if (!res.ok) throw new Error("Bill not found");
+                        return res.text();
+                      })
+                      .then(html => {
   const modalBody = document.getElementById("billPreviewContent");
   const cancelBtn = document.getElementById("cancelBillBtn");
+  const billIdVal = document.getElementById("cancelBillId").value;
 
-  // Inject the preview HTML
+  // Show the preview
   modalBody.innerHTML = html;
 
-  // Build a DOM we can query (only the EMBED html, not the whole page)
-  const tmp = document.createElement("div");
-  tmp.innerHTML = html;
-
-  // Robust detection of a cancelled bill
-  const hasCancelledElement =
-    tmp.querySelector(
-      "[data-status='cancelled'], [data-cancelled='true'], .status-cancelled, .badge-cancelled, .cancelled, .alert-danger, .badge.bg-danger"
-    ) !== null;
-
-  const hasCancelledText = /cancelled/i.test(tmp.textContent || "");
-
-  if (hasCancelledElement || hasCancelledText) {
-    // Hide the cancel button for already-cancelled bills
-    cancelBtn.classList.add("d-none");
-    cancelBtn.removeAttribute("data-bill-id");
-  } else {
-    // Show & wire the cancel button for active bills
-    cancelBtn.classList.remove("d-none");
-    cancelBtn.dataset.billId = document.getElementById("cancelBillId").value;
-  }
-
-  new bootstrap.Modal(document.getElementById("billPreviewModal")).show();
+  // Ask the server for the truth about cancellation
+  fetch(`/api/bill-meta/${billIdVal}`)
+    .then(res => res.json())
+    .then(meta => {
+      if (meta.is_cancelled) {
+        cancelBtn.classList.add("d-none");
+        cancelBtn.removeAttribute("data-bill-id");
+      } else {
+        cancelBtn.classList.remove("d-none");
+        cancelBtn.dataset.billId = billIdVal;
+      }
+      new bootstrap.Modal(document.getElementById("billPreviewModal")).show();
+    })
+    .catch(() => {
+      // If meta lookup fails, default to showing the button (safer)
+      cancelBtn.classList.remove("d-none");
+      cancelBtn.dataset.billId = billIdVal;
+      new bootstrap.Modal(document.getElementById("billPreviewModal")).show();
+    });
 })
 
-
-                                    .catch(err => {
-                                        console.error(err);
-                                        alert(err);
-                                    });
-                                });
-                                
-                                document.getElementById("cancelBillBtn").addEventListener("click", function () {
-                                    const billId = this.dataset.billId;
-                                    if (!billId) return;
-                                    
-                                    if (!confirm(`Are you sure you want to cancel bill #${billId}?`)) return;
-                                    
-                                    fetch("/api/cancel-bill", {
-                                        method: "POST",
-                                        headers: { "Content-Type": "application/json" },
-                                        body: JSON.stringify({ bill_id: billId })
-                                    })
-                                    .then(res => res.json())
-                                    .then(response => {
-                                        alert(response.message);
-                                        const modal = bootstrap.Modal.getInstance(document.getElementById("billPreviewModal"));
-                                        modal.hide();
-                                    })
-                                    .catch(err => {
-                                        console.error(err);
-                                        alert("Error cancelling the bill.");
-                                    });
-                                });
-                                
-           window.markPaid = function (billId) {
-    fetch("/api/mark-paid", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bill_id: billId })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-
-            // ✅ Just update the button cell for that bill
-            const row = document.querySelector(`a[href='/bill/${billId}']`)?.closest("tr");
-            if (row) {
-                row.querySelector("td:nth-child(7)").innerHTML = "✅ Paid";
-            }
-        }
-    });
-};
-
-                                
-   window.markDelivered = function (billId) {
-    fetch("/api/mark-delivered", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bill_id: billId })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-
-            const row = document.querySelector(`a[href='/bill/${billId}']`)?.closest("tr");
-            if (row) {
-                row.querySelector("td:nth-child(8)").innerHTML = "✅ Delivered";
-            }
-        }
-    });
-};
-
-document.getElementById("generateForm").addEventListener("submit", function (e) {
-    e.preventDefault();
-
-    const start = document.getElementById("start").value;
-    const end = document.getElementById("end").value;
-    if (!start || !end) return;
-
-    // ✅ Update summary
-    fetch(`/api/summary-range?start=${start}&end=${end}`)
-        .then(res => res.json())
-        .then(data => {
-            updateSummaryBox({
-                total_bills: data.total_bills,
-                total_sales: data.total_sales
-            }, "daily");
-        });
-
-// ✅ Load summary table grouped by date
-fetch(`/api/range-summary-by-date?start=${start}&end=${end}`)
-    .then(res => res.json())
-    .then(data => {
-        let html = `<h4>Report for ${start} to ${end}</h4>`;
-        if (!data.length) {
-            html += '<p>No records found.</p>';
-        } else {
-            html += `<table class="table table-sm table-bordered mt-3">
+                      
+                      
+                      .catch(err => {
+                        console.error(err);
+                        alert(err);
+                      });
+                    });
+                    
+                    document.getElementById("cancelBillBtn").addEventListener("click", function () {
+                      const billId = this.dataset.billId;
+                      if (!billId) return;
+                      
+                      if (!confirm(`Are you sure you want to cancel bill #${billId}?`)) return;
+                      
+                      fetch("/api/cancel-bill", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ bill_id: billId })
+                      })
+                      .then(res => res.json())
+                      .then(response => {
+                        alert(response.message);
+                        const modal = bootstrap.Modal.getInstance(document.getElementById("billPreviewModal"));
+                        modal.hide();
+                      })
+                      .catch(err => {
+                        console.error(err);
+                        alert("Error cancelling the bill.");
+                      });
+                    });
+                    
+                    window.markPaid = function (billId) {
+                      fetch("/api/mark-paid", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ bill_id: billId })
+                      })
+                      .then(res => res.json())
+                      .then(data => {
+                        if (data.success) {
+                          
+                          // ✅ Just update the button cell for that bill
+                          const row = document.querySelector(`a[href='/bill/${billId}']`)?.closest("tr");
+                          if (row) {
+                            row.querySelector("td:nth-child(7)").innerHTML = "✅ Paid";
+                          }
+                        }
+                      });
+                    };
+                    
+                    
+                    window.markDelivered = function (billId) {
+                      fetch("/api/mark-delivered", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ bill_id: billId })
+                      })
+                      .then(res => res.json())
+                      .then(data => {
+                        if (data.success) {
+                          
+                          const row = document.querySelector(`a[href='/bill/${billId}']`)?.closest("tr");
+                          if (row) {
+                            row.querySelector("td:nth-child(8)").innerHTML = "✅ Delivered";
+                          }
+                        }
+                      });
+                    };
+                    
+                    document.getElementById("generateForm").addEventListener("submit", function (e) {
+                      e.preventDefault();
+                      
+                      const start = document.getElementById("start").value;
+                      const end = document.getElementById("end").value;
+                      if (!start || !end) return;
+                      
+                      // ✅ Update summary
+                      fetch(`/api/summary-range?start=${start}&end=${end}`)
+                      .then(res => res.json())
+                      .then(data => {
+                        updateSummaryBox({
+                          total_bills: data.total_bills,
+                          total_sales: data.total_sales
+                        }, "daily");
+                      });
+                      
+                      // ✅ Load summary table grouped by date
+                      fetch(`/api/range-summary-by-date?start=${start}&end=${end}`)
+                      .then(res => res.json())
+                      .then(data => {
+                        let html = `<h4>Report for ${start} to ${end}</h4>`;
+                        if (!data.length) {
+                          html += '<p>No records found.</p>';
+                        } else {
+                          html += `<table class="table table-sm table-bordered mt-3">
                 <thead>
                     <tr>
                         <th>Date</th>
@@ -632,19 +630,19 @@ fetch(`/api/range-summary-by-date?start=${start}&end=${end}`)
                     </tr>
                 </thead>
                 <tbody>`;
-for (const row of data) {
-    const date = formatDate(row.report_date);
-    const total = parseFloat(row.total_sales);
-    const walkin = parseFloat(row.walkin_sales);
-    const online = parseFloat(row.online_sales);
-
-    const formattedTotal = total.toLocaleString("en-IN", { minimumFractionDigits: 2 });
-    const formattedWalkin = walkin.toLocaleString("en-IN", { minimumFractionDigits: 2 });
-    const formattedOnline = online.toLocaleString("en-IN", { minimumFractionDigits: 2 });
-
-    const bgColor = total > 8000 ? 'bg-success text-white' : (total < 4000 ? 'bg-danger text-white' : '');
-
-    html += `<tr>
+                            for (const row of data) {
+                              const date = formatDate(row.report_date);
+                              const total = parseFloat(row.total_sales);
+                              const walkin = parseFloat(row.walkin_sales);
+                              const online = parseFloat(row.online_sales);
+                              
+                              const formattedTotal = total.toLocaleString("en-IN", { minimumFractionDigits: 2 });
+                              const formattedWalkin = walkin.toLocaleString("en-IN", { minimumFractionDigits: 2 });
+                              const formattedOnline = online.toLocaleString("en-IN", { minimumFractionDigits: 2 });
+                              
+                              const bgColor = total > 8000 ? 'bg-success text-white' : (total < 4000 ? 'bg-danger text-white' : '');
+                              
+                              html += `<tr>
         <td>${date}</td>
         <td class="text-end ${bgColor}">₹${formattedTotal}</td>
         <td class="text-end">₹${formattedWalkin}</td>
@@ -653,62 +651,62 @@ for (const row of data) {
         <td>${row.walkin_count}</td>
         <td>${row.online_count}</td>
     </tr>`;
-}
-
-            html += `</tbody></table>`;
-        }
-
-        document.getElementById("reportResults").innerHTML = html;
-        document.getElementById("expenseReportTable").innerHTML = "";
-
-    });
-
-});
-document.getElementById("runExpenseReport").addEventListener("click", function () {
-    
-    document.getElementById("reportResults").innerHTML = "";
-    const start = document.getElementById("expStart").value;
-    const end = document.getElementById("expEnd").value;
-
-    if (!start || !end) return alert("Please select a date range.");
-
-    fetch(`/api/expense-report?start=${start}&end=${end}`)
-        .then(res => res.json())
-        .then(res => {
-            if (!res.success) {
-                alert("Failed to load report");
-                return;
-            }
-
-            const data = res.data;
-            let total = 0;
-
-            let html = `<table class="table table-bordered table-sm mt-3">
+                              }
+                              
+                              html += `</tbody></table>`;
+                            }
+                            
+                            document.getElementById("reportResults").innerHTML = html;
+                            document.getElementById("expenseReportTable").innerHTML = "";
+                            
+                          });
+                          
+                        });
+                        document.getElementById("runExpenseReport").addEventListener("click", function () {
+                          
+                          document.getElementById("reportResults").innerHTML = "";
+                          const start = document.getElementById("expStart").value;
+                          const end = document.getElementById("expEnd").value;
+                          
+                          if (!start || !end) return alert("Please select a date range.");
+                          
+                          fetch(`/api/expense-report?start=${start}&end=${end}`)
+                          .then(res => res.json())
+                          .then(res => {
+                            if (!res.success) {
+                              alert("Failed to load report");
+                              return;
+                            }
+                            
+                            const data = res.data;
+                            let total = 0;
+                            
+                            let html = `<table class="table table-bordered table-sm mt-3">
 <thead><tr><th>Date</th><th>Type</th><th>Amount</th><th>Notes</th></tr></thead><tbody>`;
-
-            data.forEach(row => {
-                total += parseFloat(row.amount);
-                html += `<tr>
+                              
+                              data.forEach(row => {
+                                total += parseFloat(row.amount);
+                                html += `<tr>
 <td>${row.date}</td>
 <td>${row.type}</td>
 <td class="text-end">₹${parseFloat(row.amount).toLocaleString()}</td>
 <td>${row.notes || ""}</td>
 </tr>`;
-            });
-
-            html += `</tbody><tfoot>
+                                });
+                                
+                                html += `</tbody><tfoot>
 <tr><td colspan="2"><strong>Total</strong></td>
 <td class="text-end"><strong>₹${total.toLocaleString()}</strong></td>
 <td></td></tr>
 </tfoot></table>`;
-
-            document.getElementById("expenseReportTable").innerHTML = html;
-        });
-});
-
-
+                                  
+                                  document.getElementById("expenseReportTable").innerHTML = html;
+                                });
+                              });
+                              
+                              
                             });
-
-                        </script>
-                    </body>
-                    </html>
+                            
+                          </script>
+                        </body>
+                        </html>

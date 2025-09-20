@@ -1042,3 +1042,14 @@ def logout():
     return redirect(url_for('login'))
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=False)
+
+
+@app.route("/api/bill-meta/<int:bill_id>")
+def api_bill_meta(bill_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    row = cur.execute("SELECT IFNULL(void, 0) AS void FROM bills WHERE id = ?", (bill_id,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify({"is_cancelled": int(row[0]) == 1})
