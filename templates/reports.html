@@ -98,6 +98,10 @@
           <button type="button" id="runOutstandingBtn" class="btn btn-danger">Outstanding</button>
         </div>
       </div>
+      <div class="card-body">
+  <button type="button" id="runOutstandingBtn" class="btn btn-danger">Outstanding</button>
+  <button type="button" id="runOutstandingByCustomerBtn" class="btn btn-outline-danger">Group by Customer</button>
+</div>
     </div>
     
     <!-- View and Cancel Bill Section -->
@@ -478,6 +482,114 @@
                       });
                     });
                     
+ document.getElementById("runOutstandingByCustomerBtn").addEventListener("click", async function () {
+  const ok = await checkAdminPassword("Enter admin password to view Outstanding Report (Grouped):");
+  if (!ok) return;
+
+  // clear
+  document.getElementById("reportResults").innerHTML = "";
+  document.getElementById("expenseReportTable").innerHTML = "";
+
+  // summary
+  fetch("/outstanding_summary")
+    .then(res => res.json())
+    .then(data => updateSummaryBox(data, "outstanding"));
+
+  // data
+  fetch("/api/outstanding-report")
+    .then(res => res.json())
+    .then(data => {
+      if (!data.length) {
+        document.getElementById("reportResults").innerHTML = "<p>No outstanding bills.</p>";
+        return;
+      }
+
+      // group
+      const grouped = {};
+      for (const row of data) {
+        const key = (row.customer_name || "Unknown").trim();
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(row);
+      }
+
+      // sort by customer name (A→Z, case-insensitive)
+      const sortedEntries = Object.entries(grouped)
+        .sort((a, b) => a[0].localeCompare(b[0], "en", { sensitivity: "base" }));
+
+      // build accordion
+      let html = `<h4>Outstanding Report (Grouped by Customer)</h4>
+                  <div class="accordion mt-3" id="custAccordion">`;
+
+      sortedEntries.forEach(([customer, bills], idx) => {
+        const totalDue = bills.reduce((sum, b) => sum + parseFloat(b.balance_amount || 0), 0);
+        const custId = `cust-${idx}`;
+        html += `
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="heading-${custId}">
+              <button class="accordion-button collapsed d-flex justify-content-between" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#collapse-${custId}"
+                      aria-expanded="false" aria-controls="collapse-${custId}">
+                <div class="w-100 d-flex justify-content-between align-items-center">
+                  <span class="fw-semibold">${customer}</span>
+                  <span class="badge bg-warning text-dark ms-3">₹${totalDue.toLocaleString("en-IN")}</span>
+                </div>
+              </button>
+            </h2>
+            <div id="collapse-${custId}" class="accordion-collapse collapse" aria-labelledby="heading-${custId}" data-bs-parent="#custAccordion">
+              <div class="accordion-body p-2">
+                <div class="table-responsive">
+                  <table class="table table-sm table-bordered mb-0">
+                    <thead>
+                      <tr>
+                        <th>Bill ID</th>
+                        <th>Phone</th>
+                        <th>Items</th>
+                        <th>Total</th>
+                        <th>Delivery Date</th>
+                        <th>Payment</th>
+                        <th>Delivery</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${bills.map(row => `
+                        <tr>
+                          <td><a href="/bill/${row.bill_id}" target="_blank">#${row.bill_id}</a></td>
+                          <td>${row.customer_phone || ""}</td>
+                          <td>${row.items}</td>
+                          <td>${row.balance_amount}</td>
+                          <td>${formatDate(row.delivery_date)}</td>
+                          <td style="color:${row.payment_status === 'Paid' ? 'green' : 'red'}">
+                            ${row.payment_status === 'Paid'
+                              ? '✅ Paid'
+                              : `<button class="btn btn-sm btn-outline-success" onclick="markPaid(${row.bill_id})">Mark Paid</button>`}
+                          </td>
+                          <td style="color:${row.delivery_status === 'Delivered' ? 'green' : 'red'}">
+                            ${row.delivery_status === 'Delivered'
+                              ? '✅ Delivered'
+                              : `<button class="btn btn-sm btn-outline-primary" onclick="markDelivered(${row.bill_id})">Mark Delivered</button>`}
+                          </td>
+                        </tr>
+                      `).join("")}
+                    </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colspan="3" class="text-end fw-semibold">Customer Total</td>
+                        <td class="fw-semibold">₹${totalDue.toLocaleString("en-IN")}</td>
+                        <td colspan="3"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>`;
+      });
+
+      html += `</div>`; // end accordion
+      document.getElementById("reportResults").innerHTML = html;
+    });
+});
+
                     
                     document.getElementById("viewBillBtn").addEventListener("click", function () {
                       const billId = document.getElementById("viewBillId").value;
