@@ -558,12 +558,12 @@
                           <td>${row.items}</td>
                           <td>${row.balance_amount}</td>
                           <td>${formatDate(row.delivery_date)}</td>
-                          <td style="color:${row.payment_status === 'Paid' ? 'green' : 'red'}">
+                          <td data-role="payment" style="color:${row.payment_status === 'Paid' ? 'green' : 'red'}">
                             ${row.payment_status === 'Paid'
                           ? '✅ Paid'
                           : `<button class="btn btn-sm btn-outline-success" onclick="markPaid(${row.bill_id})">Mark Paid</button>`}
                           </td>
-                          <td style="color:${row.delivery_status === 'Delivered' ? 'green' : 'red'}">
+                          <td data-role="delivery" style="color:${row.delivery_status === 'Delivered' ? 'green' : 'red'}">
                             ${row.delivery_status === 'Delivered'
                           ? '✅ Delivered'
                           : `<button class="btn btn-sm btn-outline-primary" onclick="markDelivered(${row.bill_id})">Mark Delivered</button>`}
@@ -667,42 +667,41 @@
                     });
                     
                     window.markPaid = function (billId) {
-                      fetch("/api/mark-paid", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ bill_id: billId })
-                      })
-                      .then(res => res.json())
-                      .then(data => {
-                        if (data.success) {
-                          
-                          // ✅ Just update the button cell for that bill
-                          const row = document.querySelector(`a[href='/bill/${billId}']`)?.closest("tr");
-                          if (row) {
-                            row.querySelector("td:nth-child(7)").innerHTML = "✅ Paid";
-                          }
-                        }
-                      });
-                    };
+  fetch("/api/mark-paid", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bill_id: billId })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      const row = document.querySelector(`a[href='/bill/${billId}']`)?.closest("tr");
+      if (row) {
+        const cell = row.querySelector("td[data-role='payment']") || row.querySelector("td:nth-child(7)");
+        if (cell) cell.innerHTML = "✅ Paid";
+      }
+    }
+  });
+};
                     
                     
                     window.markDelivered = function (billId) {
-                      fetch("/api/mark-delivered", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ bill_id: billId })
-                      })
-                      .then(res => res.json())
-                      .then(data => {
-                        if (data.success) {
-                          
-                          const row = document.querySelector(`a[href='/bill/${billId}']`)?.closest("tr");
-                          if (row) {
-                            row.querySelector("td:nth-child(8)").innerHTML = "✅ Delivered";
-                          }
-                        }
-                      });
-                    };
+  fetch("/api/mark-delivered", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bill_id: billId })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      const row = document.querySelector(`a[href='/bill/${billId}']`)?.closest("tr");
+      if (row) {
+        const cell = row.querySelector("td[data-role='delivery']") || row.querySelector("td:nth-child(8)");
+        if (cell) cell.innerHTML = "✅ Delivered";
+      }
+    }
+  });
+};
                     
                     document.getElementById("generateForm").addEventListener("submit", function (e) {
                       e.preventDefault();
