@@ -505,88 +505,97 @@
                         }
                         
                         // group
-                        const grouped = {};
-                        for (const row of data) {
-                          const key = (row.customer_name || "Unknown").trim();
-                          if (!grouped[key]) grouped[key] = [];
-                          grouped[key].push(row);
-                        }
-                        
-                        // sort by customer name (A→Z, case-insensitive)
-                        const sortedEntries = Object.entries(grouped)
-                        .sort((a, b) => a[0].localeCompare(b[0], "en", { sensitivity: "base" }));
-                        
-                        // build accordion
-                        let html = `<h4>Outstanding Report (Grouped by Customer)</h4>
-                  <div class="accordion mt-3" id="custAccordion">`;
-                        
-                        sortedEntries.forEach(([customer, bills], idx) => {
-                          const totalDue = bills.reduce((sum, b) => sum + parseFloat(b.balance_amount || 0), 0);
-                          const custId = `cust-${idx}`;
-                          html += `
-          <div class="accordion-item">
-            <h2 class="accordion-header" id="heading-${custId}">
-              <button class="accordion-button collapsed d-flex justify-content-between" type="button"
-                      data-bs-toggle="collapse" data-bs-target="#collapse-${custId}"
-                      aria-expanded="false" aria-controls="collapse-${custId}">
-                <div class="w-100 d-flex justify-content-between align-items-center">
-                  <span class="fw-semibold">${customer}</span>
-                  <span class="badge bg-warning text-dark ms-3">₹${totalDue.toLocaleString("en-IN")}</span>
-                </div>
-              </button>
-            </h2>
-            <div id="collapse-${custId}" class="accordion-collapse collapse" aria-labelledby="heading-${custId}" data-bs-parent="#custAccordion">
-              <div class="accordion-body p-2">
-                <div class="table-responsive">
-                  <table class="table table-sm table-bordered mb-0">
-                    <thead>
-                      <tr>
-                        <th>Bill ID</th>
-                        <th>Phone</th>
-                        <th>Items</th>
-                        <th>Total</th>
-                        <th>Delivery Date</th>
-                        <th>Payment</th>
-                        <th>Delivery</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${bills.map(row => `
-                        <tr>
-                          <td><a href="/bill/${row.bill_id}" target="_blank">#${row.bill_id}</a></td>
-                          <td>${row.customer_phone || ""}</td>
-                          <td>${row.items}</td>
-                          <td>${row.balance_amount}</td>
-                          <td>${formatDate(row.delivery_date)}</td>
-                          <td data-role="payment" style="color:${row.payment_status === 'Paid' ? 'green' : 'red'}">
-                            ${row.payment_status === 'Paid'
-                          ? '✅ Paid'
-                          : `<button class="btn btn-sm btn-outline-success" onclick="markPaid(${row.bill_id})">Mark Paid</button>`}
-                          </td>
-                          <td data-role="delivery" style="color:${row.delivery_status === 'Delivered' ? 'green' : 'red'}">
-                            ${row.delivery_status === 'Delivered'
-                          ? '✅ Delivered'
-                          : `<button class="btn btn-sm btn-outline-primary" onclick="markDelivered(${row.bill_id})">Mark Delivered</button>`}
-                          </td>
-                        </tr>
-                      `).join("")}
-                    </tbody>
-                    <tfoot>
-                      <tr>
-                        <td colspan="3" class="text-end fw-semibold">Customer Total</td>
-                        <td class="fw-semibold">₹${totalDue.toLocaleString("en-IN")}</td>
-                        <td colspan="3"></td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>`;
-                        });
-                        
-                        html += `</div>`; // end accordion
-                        document.getElementById("reportResults").innerHTML = html;
+// 🔐 Group by unique identifier: name + phone
+const grouped = {};
+for (const row of data) {
+  const name = (row.customer_name || "Unknown").trim();
+  const phone = (row.customer_phone || "").trim();
+  const uid = `${name}::${phone || "NA"}`;             // unique key
+  const label = phone ? `${name} (${phone})` : name;   // what we display
+
+  if (!grouped[uid]) grouped[uid] = { label, rows: [] };
+  grouped[uid].rows.push(row);
+}
+
+// 🔤 Sort by display label (case-insensitive)
+const sortedEntries = Object.entries(grouped)
+  .sort((a, b) => a[1].label.localeCompare(b[1].label, "en", { sensitivity: "base" }));
+
+// 🧩 Build accordion
+let html = `<h4>Outstanding Report (Grouped by Customer)</h4>
+            <div class="accordion mt-3" id="custAccordion">`;
+
+sortedEntries.forEach(([uid, group], idx) => {
+  const bills = group.rows;
+  const customerLabel = group.label;
+  const totalDue = bills.reduce((sum, b) => sum + parseFloat(b.balance_amount || 0), 0);
+  const custId = `cust-${idx}`;
+
+  html += `
+    <div class="accordion-item">
+      <h2 class="accordion-header" id="heading-${custId}">
+        <button class="accordion-button collapsed d-flex justify-content-between" type="button"
+                data-bs-toggle="collapse" data-bs-target="#collapse-${custId}"
+                aria-expanded="false" aria-controls="collapse-${custId}">
+          <div class="w-100 d-flex justify-content-between align-items-center">
+            <span class="fw-semibold">${customerLabel}</span>
+            <span class="badge bg-warning text-dark ms-3">₹${totalDue.toLocaleString("en-IN")}</span>
+          </div>
+        </button>
+      </h2>
+      <div id="collapse-${custId}" class="accordion-collapse collapse" aria-labelledby="heading-${custId}" data-bs-parent="#custAccordion">
+        <div class="accordion-body p-2">
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered mb-0">
+              <thead>
+                <tr>
+                  <th>Bill ID</th>
+                  <th>Phone</th>
+                  <th>Items</th>
+                  <th>Total</th>
+                  <th>Delivery Date</th>
+                  <th>Payment</th>
+                  <th>Delivery</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${bills.map(row => `
+                  <tr>
+                    <td><a href="/bill/${row.bill_id}" target="_blank">#${row.bill_id}</a></td>
+                    <td>${row.customer_phone || ""}</td>
+                    <td>${row.items}</td>
+                    <td>${row.balance_amount}</td>
+                    <td>${formatDate(row.delivery_date)}</td>
+                    <td data-role="payment" style="color:${row.payment_status === 'Paid' ? 'green' : 'red'}">
+                      ${row.payment_status === 'Paid'
+                        ? '✅ Paid'
+                        : `<button class="btn btn-sm btn-outline-success" onclick="markPaid(${row.bill_id})">Mark Paid</button>`}
+                    </td>
+                    <td data-role="delivery" style="color:${row.delivery_status === 'Delivered' ? 'green' : 'red'}">
+                      ${row.delivery_status === 'Delivered'
+                        ? '✅ Delivered'
+                        : `<button class="btn btn-sm btn-outline-primary" onclick="markDelivered(${row.bill_id})">Mark Delivered</button>`}
+                    </td>
+                  </tr>
+                `).join("")}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="3" class="text-end fw-semibold">Customer Total</td>
+                  <td class="fw-semibold">₹${totalDue.toLocaleString("en-IN")}</td>
+                  <td colspan="3"></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>`;
+});
+
+html += `</div>`;
+document.getElementById("reportResults").innerHTML = html;
+
                       });
                     });
                     
