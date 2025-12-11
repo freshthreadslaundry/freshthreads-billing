@@ -581,7 +581,7 @@ def outstanding_report():
         WHERE b.void != 1
           AND (s.payment_status != 'Paid' OR s.delivery_status != 'Delivered')
                 GROUP BY bi.bill_id, b.delivery_Date, c.name, c.phone, b.balance_amount, s.payment_status, s.delivery_status
-        ORDER BY b.date ASC
+        ORDER BY b.date DESC
     """)
     rows = cur.fetchall()
     return jsonify([dict(row) for row in rows])
