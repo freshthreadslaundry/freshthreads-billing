@@ -143,13 +143,6 @@
                     <td style="text-align: right; white-space: nowrap;">- ₹{{ "%.2f"|format(discount_amount) }}</td>
                 </tr>
                 {% endif %}
-
-                {% if surcharge_amount > 0 %}
-                <tr>
-                    <td colspan="3" style="text-align: right;">Express Service</td>
-                    <td style="text-align: right; white-space: nowrap;">+ ₹{{ "%.2f"|format(surcharge_amount) }}</td>
-                </tr>
-                {% endif %}
      <tr>
         <td colspan="2" style="font-weight: bold;">Total Items: {{ items | map(attribute='items') | sum }}</td>
         <td style="text-align: right;"><strong>Final Bill</strong></td>

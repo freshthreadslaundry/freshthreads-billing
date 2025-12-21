@@ -186,16 +186,10 @@ def billing():
         # Collect billing fields
         order_type = data.get("orderType", "Walk-in")
         delivery_date = data.get("deliveryDate")
-
         discount_type = data.get("discountType", "Amount")
         discount_value = float(data.get("discountValue") or 0)
-
-        # Express / Surcharge (bill-level)
-        express_service = 1 if data.get("expressService") in ("on", "1", "true", "yes") else 0
-        surcharge_type = data.get("surchargeType", "Rs")  # "Rs" or "%"
-        surcharge_value = float(data.get("surchargeValue") or 0)
-
         advance_paid = float(data.get("advancePaid") or 0)
+        balance_amount = float(data.get("balanceAmount") or 0)
 
         token = secrets.token_urlsafe(10)
         cur.execute("""
@@ -203,15 +197,13 @@ def billing():
                 customer_id, date, total, pickup_date, pickup_time,
                 delivery_date, dropoff_time, pickup_address,
                 order_type, discount_type, discount_value,
-                express_service, surcharge_type, surcharge_value, surcharge_amount,
                 advance_paid, balance_amount, token
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, ( 
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
             customer_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             0, "", "", delivery_date, "", pickup_address,
             order_type, discount_type, discount_value,
-            express_service, surcharge_type, surcharge_value, 0,
-            advance_paid, 0, token
+            advance_paid, balance_amount, token
         ))
 
         bill_id = cur.lastrowid
@@ -261,41 +253,7 @@ def billing():
             """, (bill_id, service_id, name, qty, rate, total, items))
 
 
-        # ---- Bill-level totals (server-side truth) ----
-        subtotal = grand_total
-
-        # Discount
-        if discount_type == "%":
-            discount_amount = subtotal * discount_value / 100
-        else:
-            discount_amount = discount_value
-
-        # Surcharge
-        if express_service and surcharge_value > 0:
-            if surcharge_type == "%":
-                surcharge_amount = subtotal * surcharge_value / 100
-            else:
-                surcharge_amount = surcharge_value
-        else:
-            surcharge_amount = 0.0
-            surcharge_type = "Rs"
-            surcharge_value = 0.0
-            express_service = 0
-
-        final_total = max(0.0, subtotal - discount_amount + surcharge_amount)
-        balance_amount = max(0.0, final_total - advance_paid)
-
-        cur.execute(
-            """UPDATE bills
-               SET total = ?,
-                   balance_amount = ?,
-                   express_service = ?,
-                   surcharge_type = ?,
-                   surcharge_value = ?,
-                   surcharge_amount = ?
-               WHERE id = ?""",
-            (subtotal, balance_amount, express_service, surcharge_type, surcharge_value, surcharge_amount, bill_id)
-        )
+        cur.execute("UPDATE bills SET total = ? WHERE id = ?", (grand_total, bill_id))
         conn.commit()
         conn.close()
 
@@ -361,17 +319,8 @@ def bill_view(bill_id):
     else:
         discount_amount = discount_value
 
-    # ✅ Surcharge (Express)
-    surcharge_amount = float(bill.get("surcharge_amount") or 0.0)
-    # Backward compatibility: if old bill has type/value but no stored amount
-    if surcharge_amount == 0 and bill.get("express_service") and float(bill.get("surcharge_value") or 0) > 0:
-        s_type = bill.get("surcharge_type") or "Rs"
-        s_val = float(bill.get("surcharge_value") or 0)
-        surcharge_amount = subtotal * s_val / 100 if s_type == "%" else s_val
-
-    # ✅ Final Bill = Subtotal - Discount + Surcharge
-    final_total = max(0.0, subtotal - discount_amount + surcharge_amount)
-
+    # ✅ Final Bill = Subtotal - Discount
+    final_total = subtotal - discount_amount
 
     # ✅ Generate QR for final total
     qr_filename = f"qr_{bill_id}.png"
@@ -395,7 +344,6 @@ def bill_view(bill_id):
         qr_image=qr_filename,
         subtotal=subtotal,
         discount_amount=discount_amount,
-        surcharge_amount=surcharge_amount,
         final_total=final_total,
     )
 
@@ -977,13 +925,7 @@ def customer_view(token):
     subtotal = sum(float(i['qty']) * float(i['rate']) for i in items)
     discount = float(bill['discount_value'] or 0)
     discount_amount = subtotal * discount / 100 if bill['discount_type'] == "%" else discount
-    surcharge_amount = float(bill.get("surcharge_amount") or 0.0)
-    if surcharge_amount == 0 and bill.get("express_service") and float(bill.get("surcharge_value") or 0) > 0:
-        s_type = bill.get("surcharge_type") or "Rs"
-        s_val = float(bill.get("surcharge_value") or 0)
-        surcharge_amount = subtotal * s_val / 100 if s_type == "%" else s_val
-
-    final_total = max(0.0, subtotal - discount_amount + surcharge_amount)
+    final_total = subtotal - discount_amount
 
     # Generate QR
     qr_filename = f"qr_{bill['id']}.png"
@@ -997,7 +939,6 @@ def customer_view(token):
         qr_image=qr_filename,
         subtotal=subtotal,
         discount_amount=discount_amount,
-        surcharge_amount=surcharge_amount,
         final_total=final_total,
     )
 

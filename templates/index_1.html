@@ -112,23 +112,6 @@
                                 </select>
                             </div>
                         </div>
-
-                        <!-- Express Service / Surcharge (bill-level) -->
-                        <div class="form-check mt-2">
-                            <input class="form-check-input" type="checkbox" id="expressService" name="expressService">
-                            <label class="form-check-label" for="expressService">Express Service</label>
-                        </div>
-                        <div class="form-group mt-2" id="surchargeGroup" style="display:none;">
-                            <label for="surchargeValue">Surcharge</label>
-                            <div class="input-group">
-                                <input type="number" class="form-control text-end" name="surchargeValue" id="surchargeValue">
-                                <select name="surchargeType" id="surchargeType" class="form-select" style="max-width: 80px;">
-                                    <option value="%">%</option>
-                                    <option value="Rs">₹</option>
-                                </select>
-                            </div>
-                        </div>
-
                         <div class="form-group">
                             <label for="totalAmount">Final Amount</label>
                             <input type="text" class="form-control text-end" name="totalAmount" readonly>
@@ -182,8 +165,6 @@
             $(document).on("input", ".qty, .rate", updateTotals);
             $(document).on("input", "input[name='discountValue'], input[name='advancePaid']", updateTotals);
             $(document).on("change", "select[name='discountType']", updateTotals);
-            $(document).on("input", "input[name='surchargeValue']", updateTotals);
-            $(document).on("change", "select[name='surchargeType'], #expressService", updateTotals);
             
             // Also recalculate on row add/remove
             $("#addRow").off("click").on("click", function () {
@@ -388,7 +369,7 @@
             let qtyInputs = document.querySelectorAll("input[name='qty[]']");
             let rateInputs = document.querySelectorAll("input[name='rate[]']");
             let totalInputs = document.querySelectorAll("input[name='total[]']");
-
+            
             for (let i = 0; i < qtyInputs.length; i++) {
                 let qty = parseFloat(qtyInputs[i].value) || 0;
                 let rate = parseFloat(rateInputs[i].value) || 0;
@@ -396,39 +377,13 @@
                 totalInputs[i].value = lineTotal.toFixed(2);
                 total += lineTotal;
             }
-
             document.querySelector("input[name='subTotal']").value = total.toFixed(2);
-
-            // Discount
             let discountVal = parseFloat(document.querySelector("input[name='discountValue']").value) || 0;
             let discountType = document.querySelector("select[name='discountType']").value;
-            let discountAmount = (discountType === '%') ? total * (discountVal / 100) : discountVal;
-
-            // Surcharge (Express Service)
-// Surcharge (Express Service)
-const expressChk = document.getElementById("expressService");
-const surchargeGroup = document.getElementById("surchargeGroup");
-const isExpress = !!(expressChk && expressChk.checked);
-
-if (surchargeGroup) surchargeGroup.style.display = isExpress ? "" : "none";
-
-
-let surchargeVal = parseFloat(
-    (document.querySelector("input[name='surchargeValue']") || {}).value
-) || 0;
-
-let surchargeType =
-    (document.querySelector("select[name='surchargeType']") || {}).value || "Rs";
-
-let surchargeAmount = 0;
-if (isExpress && surchargeVal > 0) {
-    surchargeAmount =
-        (surchargeType === '%') ? total * (surchargeVal / 100) : surchargeVal;
-}
-
-            let grandTotal = Math.max(0, total - discountAmount + surchargeAmount);
+            let discountedAmount = (discountType === '%') ? total * (discountVal / 100) : discountVal;
+            let grandTotal = Math.max(0, total - discountedAmount);
             document.querySelector("input[name='totalAmount']").value = grandTotal.toFixed(2);
-
+            
             let advance = parseFloat(document.querySelector("input[name='advancePaid']").value) || 0;
             let balance = Math.max(0, grandTotal - advance);
             document.querySelector("input[name='balanceAmount']").value = balance.toFixed(2);
