@@ -173,12 +173,26 @@
             <!-- Show QR code only if not cancelled -->
         </div>
         {% endif %}
- <div class="text-center mt-4">
+<div class="text-center mt-4">
     <p><strong>Thank you! Visit again 🙏</strong></p>
-    <p><strong></strong></p>
-    <p><strong></strong></p>
-    <p><strong></strong></p>
-    <br><br><br><br><br><br><br><br><br>
+
+    <!-- Terms & Conditions - Bill Disclaimer -->
+    <p style="font-size: 9px; color: #555; margin-top: 8px; line-height: 1.3;">
+        All items are accepted subject to our Terms & Conditions displayed at the store and available online.
+    </p>
+
+    <!-- Clickable link for screen, plain text for print -->
+    <p class="screen-only" style="font-size: 9px; margin-top: 2px;">
+        <a href="https://freshthreadslaundry.co.in/terms.html"
+           target="_blank"
+           style="text-decoration: underline; color: inherit;">
+            View full Terms & Conditions
+        </a>
+    </p>
+
+    <p style="font-size: 9px; margin-top: 2px;">
+        www.freshthreadslaundry.co.in/terms.html
+    </p>
 </div>
        
 <div class="screen-only text-center mt-3">
@@ -224,6 +238,8 @@ Thanks for choosing Fresh Threads Laundry.
 🧾 Invoice: https://pay.freshthreadslaundry.co.in/${token}  
 🌐 Services: freshthreadslaundry.co.in  
 ⭐ Review us: https://g.page/r/CcrMKL1oKHVkEAE/review
+📄 Terms & Conditions: https://freshthreadslaundry.co.in/terms.html
+
 
 FreshThreads 🙏`);
 
