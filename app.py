@@ -16,6 +16,11 @@ from flask_cors import CORS
 
 
 ADMIN_PASSWORD = "123"  # Change this as needed
+# === Customer Insights thresholds (tune anytime) ===
+VIP_MIN_SPEND = 5000          # ₹ threshold for VIP / review candidates
+LAPSED_DAYS = 45              # inactive if not visited in N days
+MIN_VISITS_FOR_REVIEW = 2     # prefer repeat customers for review ask
+
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'  # Replace with a strong secret in production
 CORS(app, resources={r"/api/*": {"origins": "*"}})  # allow cross-origin calls from Netlify
@@ -117,10 +122,13 @@ def services():
 @app.route("/customers", methods=["GET", "POST"])
 @login_required
 def customers():
+    view = request.args.get("view", "all")  # all | review | lapsed | vip
+    q = (request.args.get("q") or "").strip()
+
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
-        # Handle form submission
+        # Handle form submission (add/edit basic profile)
         if request.method == "POST":
             customer_id = request.form.get("customer_id")
             name = request.form.get("name")
@@ -137,29 +145,197 @@ def customers():
                     (name, phone, email, address, cust_type, customer_id))
             else:  # insert
                 cursor.execute("""
-                    INSERT INTO customers (name, phone, email_address, address, customer_type)
-                    VALUES (?, ?, ?, ?, ?)""",
-                    (name, phone, email, address, cust_type))
+                    INSERT INTO customers (name, phone, email_address, address, customer_type, review_requested, review_stars)
+                    VALUES (?, ?, ?, ?, ?, 'NO', NULL)
+                """, (name, phone, email, address, cust_type))
             conn.commit()
-            return redirect("/customers")
+            return redirect(url_for("customers", view=view, q=q))
 
         # Handle edit
+        edit_customer = None
         if request.args.get("edit"):
             edit_id = request.args.get("edit")
-            customer = conn.execute("SELECT * FROM customers WHERE id = ?", (edit_id,)).fetchone()
-        else:
-            customer = None
+            edit_customer = conn.execute("SELECT * FROM customers WHERE id = ?", (edit_id,)).fetchone()
 
         # Handle delete
         if request.args.get("delete"):
             del_id = request.args.get("delete")
             conn.execute("DELETE FROM customers WHERE id = ?", (del_id,))
             conn.commit()
-            return redirect("/customers")
+            return redirect(url_for("customers", view=view, q=q))
 
-        customers = conn.execute("SELECT * FROM customers ORDER BY name").fetchall()
+        # --- Customer stats (spend, visits, last visit, etc.) ---
+        # Note: bills.total is your stored subtotal. We exclude void bills.
+        stats_sql = """
+        WITH customer_stats AS (
+            SELECT
+                c.id, c.name, c.phone, c.email_address, c.address, c.customer_type,
+                c.review_requested, c.review_stars,
+                COUNT(b.id) AS visit_count,
+                COALESCE(SUM(CASE WHEN IFNULL(b.void,0) != 1 THEN b.total ELSE 0 END), 0) AS total_spend,
+                MAX(CASE WHEN IFNULL(b.void,0) != 1 THEN DATE(b.date) ELSE NULL END) AS last_visit
+            FROM customers c
+            LEFT JOIN bills b ON b.customer_id = c.id
+            GROUP BY c.id
+        ),
+        enriched AS (
+            SELECT
+                *,
+                CASE
+                    WHEN visit_count > 0 THEN (total_spend * 1.0 / visit_count)
+                    ELSE 0
+                END AS avg_bill,
+                CASE
+                    WHEN last_visit IS NOT NULL THEN CAST((julianday('now') - julianday(last_visit)) AS INT)
+                    ELSE NULL
+                END AS days_since_last_visit
+            FROM customer_stats
+        )
+        SELECT *
+        FROM enriched
+        WHERE 1=1
+        """
 
-    return render_template("customers.html", customers=customers, edit_customer=customer)
+        params = []
+        if q:
+            stats_sql += " AND (name LIKE ? OR phone LIKE ?) "
+            params.extend([f"%{q}%", f"%{q}%"])
+
+        title = "All Customers"
+        if view == "review":
+            title = "Review Candidates"
+            stats_sql += """
+            AND (review_requested IS NULL OR review_requested = 'NO')
+            AND visit_count >= ?
+            AND total_spend >= ?
+            AND days_since_last_visit IS NOT NULL
+            AND days_since_last_visit <= ?
+            """
+            params.extend([MIN_VISITS_FOR_REVIEW, VIP_MIN_SPEND, 21])
+
+        elif view == "lapsed":
+            title = "Lapsed High-Value Customers"
+            stats_sql += """
+              AND total_spend >= ?
+              AND days_since_last_visit IS NOT NULL
+              AND days_since_last_visit >= ?
+            """
+            params.extend([VIP_MIN_SPEND, LAPSED_DAYS])
+
+        elif view == "vip":
+            title = "VIP Customers"
+            stats_sql += " AND total_spend >= ? "
+            params.append(VIP_MIN_SPEND)
+
+        stats_sql += " ORDER BY total_spend DESC, visit_count DESC, name ASC LIMIT 500"
+
+        customers = conn.execute(stats_sql, params).fetchall()
+
+        # --- Insights tiles ---
+        insights = {}
+
+        insights["total_customers"] = conn.execute("SELECT COUNT(*) FROM customers").fetchone()[0]
+
+        insights["active_30d"] = conn.execute("""
+            SELECT COUNT(DISTINCT c.id)
+            FROM customers c
+            JOIN bills b ON b.customer_id = c.id
+            WHERE IFNULL(b.void,0) != 1
+              AND DATE(b.date) >= DATE('now', '-30 day')
+        """).fetchone()[0]
+
+        insights["new_this_month"] = conn.execute("""
+            SELECT COUNT(DISTINCT c.id)
+            FROM customers c
+            JOIN bills b ON b.customer_id = c.id
+            WHERE IFNULL(b.void,0) != 1
+              AND STRFTIME('%Y-%m', b.date) = STRFTIME('%Y-%m', 'now')
+        """).fetchone()[0]
+
+        repeat = conn.execute("""
+            WITH v AS (
+              SELECT customer_id, COUNT(*) AS n
+              FROM bills
+              WHERE IFNULL(void,0) != 1
+              GROUP BY customer_id
+            )
+            SELECT
+              SUM(CASE WHEN n >= 2 THEN 1 ELSE 0 END) AS repeaters,
+              COUNT(*) AS total
+            FROM v
+        """).fetchone()
+        repeaters = repeat[0] or 0
+        total_visiting = repeat[1] or 0
+        insights["repeat_rate"] = int(round((repeaters * 100.0 / total_visiting), 0)) if total_visiting else 0
+
+    return render_template(
+        "customers.html",
+        customers=customers,
+        edit_customer=edit_customer,
+        view=view,
+        q=q,
+        title=title,
+        insights=insights
+    )
+@app.route("/api/customers/update-review", methods=["POST"])
+@login_required
+def api_update_customer_review():
+    data = request.get_json() or {}
+
+    customer_id = data.get("customer_id")
+    review_requested = (data.get("review_requested") or "NO").upper()
+    review_stars = data.get("review_stars")
+
+    if review_requested not in ("YES", "NO"):
+        return jsonify(success=False, error="review_requested must be YES/NO"), 400
+
+    if review_requested == "NO":
+        # 🔑 If review is reset, clear stars
+        review_stars = None
+    else:
+        if review_stars is not None:
+            try:
+                review_stars = int(review_stars)
+                if review_stars < 1 or review_stars > 5:
+                    return jsonify(success=False, error="Stars must be 1–5"), 400
+            except:
+                return jsonify(success=False, error="Invalid stars"), 400
+
+    if not customer_id:
+        return jsonify(success=False, error="customer_id required"), 400
+
+    db = get_db_connection()
+    db.execute("""
+        UPDATE customers
+        SET review_requested = ?, review_stars = ?
+        WHERE id = ?
+    """, (review_requested, review_stars, customer_id))
+    db.commit()
+
+    return jsonify(success=True)
+
+
+@app.route("/api/customers/mark-review-requested", methods=["POST"])
+@login_required
+def api_mark_review_requested_bulk():
+    data = request.get_json() or {}
+    ids = data.get("customer_ids") or []
+    ids = [int(x) for x in ids if str(x).isdigit()]
+
+    if not ids:
+        return jsonify(success=False, error="customer_ids required"), 400
+
+    placeholders = ",".join(["?"] * len(ids))
+    db = get_db_connection()
+    db.execute(f"""
+        UPDATE customers
+        SET review_requested = 'YES'
+        WHERE id IN ({placeholders})
+    """, ids)
+    db.commit()
+    return jsonify(success=True, updated=len(ids))
+
+
 @app.route("/billing", methods=["GET", "POST"])
 @login_required
 def billing():
@@ -1092,7 +1268,35 @@ def get_expenses_by_date():
     """, (start, end)).fetchall()
     return jsonify([dict(r) for r in rows])
 
+@app.route("/api/bill-meta/<int:bill_id>")
+def api_bill_meta(bill_id):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    row = cur.execute("SELECT IFNULL(void, 0) AS void FROM bills WHERE id = ?", (bill_id,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify({"is_cancelled": int(row[0]) == 1})
 
+
+@app.route("/api/customers/mark-review-requested-single", methods=["POST"])
+@login_required
+def api_mark_review_requested_single():
+    data = request.get_json() or {}
+    customer_id = data.get("customer_id")
+
+    if not customer_id:
+        return jsonify(success=False, error="customer_id required"), 400
+
+    db = get_db_connection()
+    db.execute("""
+        UPDATE customers
+        SET review_requested = 'YES'
+        WHERE id = ?
+    """, (customer_id,))
+    db.commit()
+
+    return jsonify(success=True)
 
 
 @app.route('/logout')
@@ -1103,12 +1307,4 @@ if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=False)
 
 
-@app.route("/api/bill-meta/<int:bill_id>")
-def api_bill_meta(bill_id):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    row = cur.execute("SELECT IFNULL(void, 0) AS void FROM bills WHERE id = ?", (bill_id,)).fetchone()
-    conn.close()
-    if not row:
-        return jsonify({"error": "Not found"}), 404
-    return jsonify({"is_cancelled": int(row[0]) == 1})
+
