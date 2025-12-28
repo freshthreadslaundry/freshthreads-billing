@@ -29,6 +29,12 @@ USERS = {
     'admin': 'password123'  # Change this to your preferred username and password
 }
 
+def require_internal_secret():
+    expected = os.environ.get("FT_INTERNAL_SECRET", "")
+    got = request.headers.get("X-FT-SECRET", "")
+    return bool(expected) and secrets.compare_digest(got, expected)
+
+
 def generate_token():
     return secrets.token_urlsafe(10)  # ~16 char secure URL-safe token
 
@@ -1179,6 +1185,8 @@ def customer_view(token):
 
 @app.route("/api/bill-info/<token>")
 def api_bill_info(token):
+    if not require_internal_secret():
+        return jsonify({"error": "Forbidden"}), 403
     conn = get_db_connection()
     cur = conn.cursor()
 
