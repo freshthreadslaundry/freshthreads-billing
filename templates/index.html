@@ -34,6 +34,19 @@
         .text-right {
             text-align: right;
         }
+
+        /* Compact wallet summary (shown only when wallet balance > 0) */
+        #walletSection { display: none; }
+        #walletSection .wallet-line {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 2px 0;
+            font-size: 0.95rem;
+        }
+        #walletSection .wallet-label { color: #555; }
+        #walletSection .wallet-value { font-weight: 600; }
+
     </style>
     <script type="text/javascript">
         function disableBack() { window.history.forward(); }
@@ -128,11 +141,38 @@
                                 </select>
                             </div>
                         </div>
-
-                        <div class="form-group">
-                            <label for="totalAmount">Final Amount</label>
-                            <input type="text" class="form-control text-end" name="totalAmount" readonly>
+                        <!-- Subscription Wallet (auto-applied, shown only when balance available) -->
+                        <div id="walletSection" class="mt-2">
+                            <div class="wallet-line">
+                                <span class="wallet-label">Wallet Balance</span>
+                                <span class="wallet-value" id="walletBalanceText">0.00</span>
+                            </div>
+                            <div class="wallet-line">
+                                <span class="wallet-label">Wallet Used</span>
+                                <span class="wallet-value" id="walletUsedText">0.00</span>
+                            </div>
+                            <div class="wallet-line">
+                                <span class="wallet-label">Wallet Remaining</span>
+                                <span class="wallet-value" id="walletRemainingText">0.00</span>
+                            </div>
+                            <hr class="my-2">
+                            <div class="wallet-line">
+                                <span class="wallet-label">Total (Payable)</span>
+                                <span class="wallet-value" id="walletPayableText">0.00</span>
+                            </div>
                         </div>
+
+                        <div class="form-group mt-2" id="totalPayableGroup">
+                            <label for="totalAmount">Total (Payable)</label>
+                            <input type="text" class="form-control text-end" id="totalAmount" name="totalAmount" readonly>
+                        </div>
+
+                        <!-- Hidden wallet numeric fields for JS compatibility -->
+                        <input type="hidden" id="walletBalance" value="0.00">
+                        <input type="hidden" id="walletUsed" value="0.00">
+                        <input type="hidden" id="walletRemaining" value="0.00">
+                        <input type="hidden" id="walletUsedHidden" name="walletUsed" value="0">
+
                         <div class="form-group" style="display: none;">
                             <label for="advancePaid">Advance Paid</label>
                             <input type="number" class="form-control text-end" name="advancePaid" value="0">
@@ -141,6 +181,7 @@
                             <label for="balanceAmount">Balance</label>
                             <input type="text" class="form-control text-end" name="balanceAmount" readonly>
                         </div>
+                        
                         <div class="mt-3">
                             <button type="submit" class="btn btn-success mt-2" id="generateBill">Generate Bill</button>
                         </div>
@@ -173,6 +214,56 @@
     <script>
         
         let customerMap = {}, serviceMap = {};
+        let currentWalletBalance = 0;
+        let hasSubscriptionCustomer = false;
+  async function fetchWalletStatus(phone) {
+    const paidChk = document.getElementById("isPaid");
+    const wasSubscription = hasSubscriptionCustomer;
+
+    if (!phone) {
+        currentWalletBalance = 0;
+        hasSubscriptionCustomer = false;
+        if (paidChk && wasSubscription) paidChk.checked = false;
+        updateTotals();
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/subscription-status?phone=${encodeURIComponent(phone)}`);
+        const data = await res.json();
+
+        if (data && data.success && data.exists && data.is_active) {
+            currentWalletBalance = Number(data.balance || 0);
+        } else {
+            currentWalletBalance = 0;
+        }
+    } catch (e) {
+        currentWalletBalance = 0;
+    }
+
+    hasSubscriptionCustomer = (currentWalletBalance > 0);
+
+    // If switching FROM subscription -> non-subscription, force uncheck Paid
+    if (paidChk && wasSubscription && !hasSubscriptionCustomer) {
+        paidChk.checked = false;
+    }
+
+    updateTotals();
+}
+
+        
+        function billHasSubscriptionTopup() {
+            let hasTopup = false;
+            $("#serviceTable tbody tr").each(function () {
+                const s = ($(this).find("input[name='service[]']").val() || "").toLowerCase();
+                if (s.includes("subscription wallet")) {
+                    hasTopup = true;
+                    return false; // break
+                }
+            });
+            return hasTopup;
+        }
+
         
         $(document).ready(function () {
             $(document).on("input", "input[name='service[]']", function () {
@@ -258,7 +349,8 @@
                 </tbody><tfoot>
                     <tr><td colspan="2">Subtotal</td><td colspan="2">₹${$("input[name='subTotal']").val()}</td></tr>
                     <tr><td colspan="2">Discount</td><td colspan="2">${$("input[name='discountValue']").val()}${$("select[name='discountType']").val()}</td></tr>
-                    <tr><td colspan="2">Total</td><td colspan="2">₹${$("input[name='totalAmount']").val()}</td></tr>
+                    <tr><td colspan="2">Wallet Used</td><td colspan="2">₹${$("#walletUsedHidden").val() || "0.00"}</td></tr>
+                    <tr><td colspan="2">Total (Payable)</td><td colspan="2">₹${$("input[name='totalAmount']").val()}</td></tr>
                     <tr><td colspan="2">Advance</td><td colspan="2">₹${$("input[name='advancePaid']").val()}</td></tr>
                     <tr><td colspan="2">Balance</td><td colspan="2">₹${$("input[name='balanceAmount']").val()}</td></tr>
                 </tfoot></table>
@@ -316,11 +408,23 @@
                     $("input[name='emailAddress']").val(selected.email_address);
                     $("input[name='pickupAddress']").val(selected.address);
                     $("select[name='customerType']").val(selected.customer_type);
+                    fetchWalletStatus(selected.phone);
                 } else {
                     console.warn("No matching customer for:", selectedPhone);
                 }
+
+            // If phone is typed manually (no autocomplete selection), fetch wallet on blur
+
             });
-            
+                        custInput.addEventListener("blur", function () {
+                const phone = (this.value || "").trim();
+                if (phone.length >= 5) { // avoid calling on empty/too-short
+                    fetchWalletStatus(phone);
+                } else {
+                    currentWalletBalance = 0;
+                    updateTotals();
+                }
+            });
             function checkForKG($row) {
                 const val = $row.find("input[name='service[]']").val()?.toLowerCase() || "";
                 const piecesCell = $row.find(".pieces-field");
@@ -382,7 +486,8 @@
                 updateTotals();
             });
         });
-        
+
+
         function updateTotals() {
             let total = 0;
             let qtyInputs = document.querySelectorAll("input[name='qty[]']");
@@ -427,10 +532,62 @@ if (isExpress && surchargeVal > 0) {
 }
 
             let grandTotal = Math.max(0, total - discountAmount + surchargeAmount);
-            document.querySelector("input[name='totalAmount']").value = grandTotal.toFixed(2);
+                        // Auto-apply subscription wallet (no checkbox)
+            const eligibleForWallet = !billHasSubscriptionTopup();
+            const walletUsedAmt = eligibleForWallet ? Math.min(currentWalletBalance, grandTotal) : 0;
+            const walletRemainingAmt = Math.max(0, currentWalletBalance - walletUsedAmt);
+            const payable = Math.max(0, grandTotal - walletUsedAmt);
+
+            // Update wallet fields / visibility
+            const walletSection = document.getElementById("walletSection");
+            const totalPayableGroup = document.getElementById("totalPayableGroup");
+
+            const wb = document.getElementById("walletBalance");
+            const wu = document.getElementById("walletUsed");
+            const wr = document.getElementById("walletRemaining");
+            const wuh = document.getElementById("walletUsedHidden");
+
+            const wbText = document.getElementById("walletBalanceText");
+            const wuText = document.getElementById("walletUsedText");
+            const wrText = document.getElementById("walletRemainingText");
+            const payText = document.getElementById("walletPayableText");
+
+            const showWallet = eligibleForWallet && (currentWalletBalance || 0) > 0;
+
+            // Keep numeric values available for JS/backend
+            if (wb) wb.value = (currentWalletBalance || 0).toFixed(2);
+            if (wu) wu.value = walletUsedAmt.toFixed(2);
+            if (wr) wr.value = walletRemainingAmt.toFixed(2);
+            if (wuh) wuh.value = walletUsedAmt.toFixed(2);
+
+            // Update compact display
+            if (wbText) wbText.textContent = (currentWalletBalance || 0).toFixed(2);
+            if (wuText) wuText.textContent = walletUsedAmt.toFixed(2);
+            if (wrText) wrText.textContent = walletRemainingAmt.toFixed(2);
+            if (payText) payText.textContent = payable.toFixed(2);
+
+            // Toggle visibility
+            if (walletSection) walletSection.style.display = showWallet ? "block" : "none";
+            if (totalPayableGroup) totalPayableGroup.style.display = showWallet ? "none" : "";
+
+            // Always set the actual payable input (used by backend)
+            document.querySelector("input[name='totalAmount']").value = payable.toFixed(2);
+        
+// Auto-check Paid ONLY if customer has subscription AND payable is zero or less
+const paidChk = document.getElementById("isPaid");
+if (paidChk) {
+    if (hasSubscriptionCustomer) {
+        // For subscription customers, Paid should reflect payable
+        paidChk.checked = (payable <= 0);
+    }
+    // For non-subscription customers, don't auto-toggle here
+}
+
+
+
 
             let advance = parseFloat(document.querySelector("input[name='advancePaid']").value) || 0;
-            let balance = Math.max(0, grandTotal - advance);
+            let balance = Math.max(0, payable - advance);
             document.querySelector("input[name='balanceAmount']").value = balance.toFixed(2);
         }
         const deliveryInput = document.getElementById("deliveryDate");

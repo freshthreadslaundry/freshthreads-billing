@@ -1,13 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, send_file, session, flash
 from functools import wraps
 import sqlite3
-from datetime import date, datetime as _dt_datetime
-
-# Python 3.12+ sqlite3 default date/datetime adapters are deprecated.
-# Store dates/timestamps as ISO-8601 TEXT.
-sqlite3.register_adapter(date, lambda d: d.isoformat())
-sqlite3.register_adapter(_dt_datetime, lambda dt: dt.isoformat(timespec="seconds"))
-
 from datetime import datetime, timedelta
 from flask import jsonify
 import qrcode
@@ -45,6 +38,198 @@ def require_internal_secret():
 def generate_token():
     return secrets.token_urlsafe(10)  # ~16 char secure URL-safe token
 
+def apply_subscription_credit_for_bill(bill_id, conn=None):
+    """Apply subscription wallet credit for a PAID subscription bill.
+    If `conn` is provided, uses the same connection/transaction (recommended) to avoid SQLite locks.
+    """
+    own_conn = False
+    if conn is None:
+        conn = get_db_connection()
+        own_conn = True
+    cur = conn.cursor()
+
+    # 1. Check if this bill contains a subscription service
+    cur.execute("""
+        SELECT bi.service_id, bi.qty, sp.credit_amount, b.customer_id
+        FROM bill_items bi
+        JOIN subscription_products sp
+            ON sp.service_id = bi.service_id
+           AND sp.is_active = 1
+        JOIN bills b ON b.id = bi.bill_id
+        WHERE bi.bill_id = ?
+    """, (bill_id,))
+    rows = cur.fetchall()
+
+    if not rows:
+        conn.close()
+        return  # not a subscription bill
+
+    customer_id = rows[0]["customer_id"]
+
+    # 2. Prevent double credit
+    cur.execute("""
+        SELECT 1 FROM subscription_ledger
+        WHERE bill_id = ? AND txn_type = 'CREDIT'
+        LIMIT 1
+    """, (bill_id,))
+    if cur.fetchone():
+        conn.close()
+        return
+
+    total_credit = sum(r["credit_amount"] * r["qty"] for r in rows)
+
+    # 3. Ensure customer_subscriptions exists
+    cur.execute("""
+        INSERT OR IGNORE INTO customer_subscriptions
+        (customer_id, current_balance, is_active)
+        VALUES (?, 0, 1)
+    """, (customer_id,))
+
+    # 4. Insert ledger CREDIT
+    cur.execute("""
+        INSERT INTO subscription_ledger
+        (customer_id, bill_id, txn_type, amount, notes)
+        VALUES (?, ?, 'CREDIT', ?, 'Subscription unlocked after payment')
+    """, (customer_id, bill_id, total_credit))
+
+    # 5. Update cached balance
+    cur.execute("""
+        UPDATE customer_subscriptions
+        SET current_balance = current_balance + ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE customer_id = ?
+    """, (total_credit, customer_id))
+
+    if own_conn:
+        conn.commit()
+        conn.close()
+
+
+def _is_subscription_bill(conn, bill_id: int) -> bool:
+    row = conn.execute(
+        """SELECT 1
+             FROM bill_items bi
+             JOIN subscription_products sp
+               ON sp.service_id = bi.service_id
+              AND sp.is_active = 1
+            WHERE bi.bill_id = ?
+            LIMIT 1""",
+        (bill_id,),
+    ).fetchone()
+    return bool(row)
+
+def _get_wallet_balance(conn, customer_id: int) -> float:
+    row = conn.execute(
+        "SELECT current_balance FROM customer_subscriptions WHERE customer_id = ? AND is_active = 1",
+        (customer_id,),
+    ).fetchone()
+    return float(row[0] or 0.0) if row else 0.0
+
+def _ensure_wallet_row(conn, customer_id: int):
+    conn.execute(
+        """INSERT OR IGNORE INTO customer_subscriptions (customer_id, current_balance, is_active)
+             VALUES (?, 0, 1)""",
+        (customer_id,),
+    )
+
+def apply_subscription_debit_for_bill(bill_id: int, customer_id: int, amount: float, conn):
+    """Debits subscription wallet for a bill (DEBIT), using the SAME connection/transaction.
+    Idempotent: will not insert another DEBIT for the same bill if one already exists.
+    """
+    if amount <= 0:
+        return 0.0
+
+    # Block redemption on subscription purchase bills
+    if _is_subscription_bill(conn, bill_id):
+        return 0.0
+
+    # Prevent double-debit
+    already = conn.execute(
+        """SELECT 1 FROM subscription_ledger
+             WHERE bill_id = ? AND txn_type = 'DEBIT'
+             LIMIT 1""",
+        (bill_id,),
+    ).fetchone()
+    if already:
+        return 0.0
+
+    bal = _get_wallet_balance(conn, customer_id)
+    use = min(float(amount), float(bal))
+    if use <= 0:
+        return 0.0
+
+    _ensure_wallet_row(conn, customer_id)
+
+    conn.execute(
+        """INSERT INTO subscription_ledger (customer_id, bill_id, txn_type, amount, notes)
+             VALUES (?, ?, 'DEBIT', ?, ?)""",
+        (customer_id, bill_id, use, f"Subscription wallet used on bill #{bill_id}"),
+    )
+    conn.execute(
+        """UPDATE customer_subscriptions
+             SET current_balance = current_balance - ?,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE customer_id = ?""",
+        (use, customer_id),
+    )
+    return use
+
+def reverse_subscription_debit_for_bill(bill_id: int, conn):
+    """If bill had a wallet DEBIT, insert REVERSAL once and restore balance."""
+    debit_row = conn.execute(
+        """SELECT customer_id, SUM(amount) AS amt
+             FROM subscription_ledger
+             WHERE bill_id = ? AND txn_type = 'DEBIT'
+             GROUP BY customer_id""",
+        (bill_id,),
+    ).fetchone()
+    if not debit_row:
+        return 0.0
+
+    customer_id = int(debit_row["customer_id"])
+    debit_amt = float(debit_row["amt"] or 0.0)
+    if debit_amt <= 0:
+        return 0.0
+
+    # Idempotent: do not reverse twice
+    rev_exists = conn.execute(
+        """SELECT 1 FROM subscription_ledger
+             WHERE bill_id = ? AND txn_type = 'REVERSAL'
+             LIMIT 1""",
+        (bill_id,),
+    ).fetchone()
+    if rev_exists:
+        return 0.0
+
+    _ensure_wallet_row(conn, customer_id)
+    conn.execute(
+        """INSERT INTO subscription_ledger (customer_id, bill_id, txn_type, amount, notes)
+             VALUES (?, ?, 'REVERSAL', ?, ?)""",
+        (customer_id, bill_id, debit_amt, f"Reversal for cancelled bill #{bill_id}"),
+    )
+    conn.execute(
+        """UPDATE customer_subscriptions
+             SET current_balance = current_balance + ?,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE customer_id = ?""",
+        (debit_amt, customer_id),
+    )
+    return debit_amt
+
+def get_wallet_used_for_bill(conn, bill_id: int) -> float:
+    """Net wallet used on a bill = DEBIT - REVERSAL (never negative)."""
+    row = conn.execute(
+        """SELECT
+               COALESCE(SUM(CASE WHEN txn_type='DEBIT' THEN amount ELSE 0 END), 0) AS deb,
+               COALESCE(SUM(CASE WHEN txn_type='REVERSAL' THEN amount ELSE 0 END), 0) AS rev
+             FROM subscription_ledger
+             WHERE bill_id = ? AND txn_type IN ('DEBIT','REVERSAL')""",
+        (bill_id,),
+    ).fetchone()
+    deb = float(row["deb"] or 0.0)
+    rev = float(row["rev"] or 0.0)
+    return max(0.0, deb - rev)
+
 # Decorator to enforce login
 def login_required(f):
     @wraps(f)
@@ -72,51 +257,6 @@ def api_customers():
         """, (f"%{query}%", f"%{query}%")).fetchall()
     return jsonify([dict(row) for row in rows])
 
-
-@app.route("/api/subscription-status")
-@login_required
-def api_subscription_status():
-    """Return subscription wallet status for a customer phone.
-    This endpoint is used by index.html to show/hide the wallet UI.
-    """
-    phone = (request.args.get("phone") or "").strip()
-    if not phone:
-        return jsonify({"success": False, "error": "phone is required"}), 400
-
-    with get_db_connection() as conn:
-        cur = conn.cursor()
-
-        cur.execute("SELECT id, name, phone FROM customers WHERE phone = ? LIMIT 1", (phone,))
-        cust = cur.fetchone()
-        if not cust:
-            return jsonify({"success": True, "exists": False, "balance": 0, "is_active": False})
-
-        customer_id = cust["id"]
-
-        # customer_subscriptions may not exist in older DBs; fail gracefully.
-        try:
-            cur.execute(
-                "SELECT current_balance, is_active, updated_at FROM customer_subscriptions WHERE customer_id = ? LIMIT 1",
-                (customer_id,),
-            )
-            sub = cur.fetchone()
-        except sqlite3.OperationalError:
-            sub = None
-
-        balance = float(sub["current_balance"]) if sub else 0.0
-        is_active = bool(sub["is_active"]) if sub else False
-        updated_at = sub["updated_at"] if sub else None
-
-        return jsonify({
-            "success": True,
-            "exists": True,
-            "customer_id": customer_id,
-            "name": cust["name"],
-            "phone": cust["phone"],
-            "balance": balance,
-            "is_active": is_active,
-            "updated_at": updated_at
-        })
 @app.route("/api/services")
 def api_services():
     query = request.args.get("q", "")
@@ -129,96 +269,59 @@ def api_services():
     return jsonify([dict(row) for row in rows])
 
 
+@app.route("/api/subscription-status")
+@login_required
+def api_subscription_status():
+    """Return subscription wallet status for a customer by phone.
+    Does NOT auto-create wallet rows. Balance is 0 if customer has no wallet row.
+    """
+    phone = (request.args.get("phone") or "").strip()
+    if not phone:
+        return jsonify(success=False, error="phone is required"), 400
+
+    with get_db_connection() as conn:
+        cust = conn.execute("SELECT id, name, phone FROM customers WHERE phone = ? LIMIT 1", (phone,)).fetchone()
+        if not cust:
+            return jsonify(success=True, exists=False, balance=0.0, is_active=False)
+
+        wallet = conn.execute(
+            "SELECT current_balance, is_active, updated_at FROM customer_subscriptions WHERE customer_id = ?",
+            (cust["id"],),
+        ).fetchone()
+
+        if wallet:
+            balance = float(wallet["current_balance"] or 0)
+            is_active = bool(wallet["is_active"])
+            updated_at = wallet["updated_at"]
+        else:
+            balance = 0.0
+            is_active = False
+            updated_at = None
+
+    return jsonify(
+        success=True,
+        exists=True,
+        customer_id=int(cust["id"]),
+        name=cust["name"],
+        phone=cust["phone"],
+        balance=balance,
+        is_active=is_active,
+        updated_at=updated_at,
+    )
+
+
 def get_db_connection():
-    # Use a longer timeout and WAL to reduce 'database is locked' on Windows.
+    # Use a generous timeout + WAL to reduce 'database is locked' errors on Windows
     conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute("PRAGMA foreign_keys = ON;")
     try:
-        cur.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA synchronous = NORMAL")
+        conn.execute("PRAGMA busy_timeout = 30000")
     except Exception:
         pass
-    cur.execute("PRAGMA busy_timeout = 30000;")
     return conn
-
-def apply_subscription_credit_for_bill(bill_id, conn, cur):
-    """If the bill contains subscription top-up service(s) and is Paid, credit the customer's wallet.
-    Idempotent: will not double-credit the same bill.
-    Uses the provided conn/cur (same transaction) to avoid DB locks.
-    """
-    # Check bill is marked Paid
-    cur.execute("SELECT payment_status FROM bill_status WHERE bill_id = ?", (bill_id,))
-    s = cur.fetchone()
-    if not s or str(s["payment_status"]).lower() != "paid":
-        return 0.0
-
-    # Prevent double credit
-    cur.execute(
-        "SELECT 1 FROM subscription_ledger WHERE bill_id = ? AND txn_type = 'CREDIT' LIMIT 1",
-        (bill_id,),
-    )
-    if cur.fetchone():
-        return 0.0
-
-    # Find subscription top-up items on this bill and compute credit
-    cur.execute(
-        """
-        SELECT b.customer_id, bi.qty, sp.credit_amount
-        FROM bill_items bi
-        JOIN subscription_products sp
-          ON sp.service_id = bi.service_id
-         AND sp.is_active = 1
-        JOIN bills b ON b.id = bi.bill_id
-        WHERE bi.bill_id = ?
-        """,
-        (bill_id,),
-    )
-    rows = cur.fetchall()
-    if not rows:
-        return 0.0
-
-    customer_id = rows[0]["customer_id"]
-    total_credit = 0.0
-    for r in rows:
-        qty = float(r["qty"] or 0)
-        credit = float(r["credit_amount"] or 0)
-        total_credit += qty * credit
-
-    if total_credit <= 0:
-        return 0.0
-
-    # Ensure wallet row exists
-    cur.execute(
-        """
-        INSERT OR IGNORE INTO customer_subscriptions (customer_id, current_balance, is_active)
-        VALUES (?, 0, 1)
-        """,
-        (customer_id,),
-    )
-
-    # Ledger credit
-    cur.execute(
-        """
-        INSERT INTO subscription_ledger (customer_id, bill_id, txn_type, amount, notes)
-        VALUES (?, ?, 'CREDIT', ?, 'Subscription credit unlocked after payment')
-        """,
-        (customer_id, bill_id, total_credit),
-    )
-
-    # Update cached balance
-    cur.execute(
-        """
-        UPDATE customer_subscriptions
-        SET current_balance = current_balance + ?,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE customer_id = ?
-        """,
-        (total_credit, customer_id),
-    )
-
-    return total_credit
-
 
 @app.route("/")
 @login_required
@@ -480,6 +583,104 @@ def api_mark_review_requested_bulk():
     return jsonify(success=True, updated=len(ids))
 
 
+
+
+# ------------------------------------------------------------
+# Subscription Wallet: apply credits for PAID subscription bills
+# Rule: credit is unlocked ONLY after bill_status.payment_status becomes 'Paid'
+# No changes to bills table; all audit trail is via subscription_ledger
+# ------------------------------------------------------------
+
+def _ensure_customer_wallet_row(conn, customer_id: int):
+    conn.execute(
+        """INSERT OR IGNORE INTO customer_subscriptions (customer_id, current_balance, is_active)
+           VALUES (?, 0, 1)""",
+        (customer_id,),
+    )
+
+def _compute_subscription_credit_for_bill(conn, bill_id: int) -> float:
+    row = conn.execute(
+        """SELECT COALESCE(SUM(sp.credit_amount * COALESCE(NULLIF(bi.qty, 0), 1)), 0) AS credit
+             FROM bill_items bi
+             JOIN subscription_products sp
+               ON sp.service_id = bi.service_id
+              AND sp.is_active = 1
+            WHERE bi.bill_id = ?""",
+        (bill_id,),
+    ).fetchone()
+    return float(row[0] or 0)
+
+@app.route("/api/subscription/apply-paid-credits", methods=["POST"])
+@login_required
+def api_apply_paid_subscription_credits():
+    """
+    Finds PAID bills that include subscription services (service_id present in subscription_products)
+    and applies wallet CREDIT exactly once per bill (idempotent).
+    """
+    conn = get_db_connection()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+
+        # Find eligible paid bills that have subscription items and are not yet credited
+        bills = conn.execute(
+            """SELECT b.id AS bill_id, b.customer_id
+                 FROM bills b
+                 JOIN bill_status bs ON bs.bill_id = b.id
+                WHERE bs.payment_status = 'Paid'
+                  AND EXISTS (
+                      SELECT 1
+                        FROM bill_items bi
+                        JOIN subscription_products sp
+                          ON sp.service_id = bi.service_id
+                         AND sp.is_active = 1
+                       WHERE bi.bill_id = b.id
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1
+                        FROM subscription_ledger sl
+                       WHERE sl.bill_id = b.id
+                         AND sl.txn_type = 'CREDIT'
+                  )
+                ORDER BY b.id ASC"""
+        ).fetchall()
+
+        processed = []
+        for r in bills:
+            bill_id = int(r["bill_id"])
+            customer_id = int(r["customer_id"])
+
+            credit = _compute_subscription_credit_for_bill(conn, bill_id)
+            if credit <= 0:
+                continue
+
+            _ensure_customer_wallet_row(conn, customer_id)
+
+            # Insert ledger CREDIT (audit trail)
+            conn.execute(
+                """INSERT INTO subscription_ledger (customer_id, bill_id, txn_type, amount, notes)
+                     VALUES (?, ?, 'CREDIT', ?, ?)""",
+                (customer_id, bill_id, credit, f"Subscription credit unlocked for PAID bill #{bill_id}"),
+            )
+
+            # Update cached balance
+            conn.execute(
+                """UPDATE customer_subscriptions
+                       SET current_balance = current_balance + ?,
+                           updated_at = CURRENT_TIMESTAMP
+                     WHERE customer_id = ?""",
+                (credit, customer_id),
+            )
+
+            processed.append({"bill_id": bill_id, "customer_id": customer_id, "credit": credit})
+
+        conn.commit()
+        return jsonify(success=True, processed_count=len(processed), processed=processed)
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify(success=False, error=str(e)), 500
+    finally:
+        conn.close()
 @app.route("/billing", methods=["GET", "POST"])
 @login_required
 def billing():
@@ -603,58 +804,66 @@ def billing():
             express_service = 0
 
         final_total = max(0.0, subtotal - discount_amount + surcharge_amount)
-
-        # ---- Subscription wallet auto-deduction (server-side truth) ----
-        # Auto-apply wallet on normal bills when customer has balance.
-        # Do NOT apply wallet on subscription top-up bills (items that exist in subscription_products).
-        wallet_used = 0.0
-        wallet_balance_before = 0.0
-
-        # Is this a subscription top-up bill?
-        cur.execute("""
-            SELECT 1
-            FROM bill_items bi
-            JOIN subscription_products sp
-              ON sp.service_id = bi.service_id
-             AND sp.is_active = 1
-            WHERE bi.bill_id = ?
-            LIMIT 1
-        """, (bill_id,))
-        is_subscription_topup_bill = cur.fetchone() is not None
-
-        if not is_subscription_topup_bill:
-            # Fetch wallet balance (only customers who bought subscription will have a row)
-            cur.execute("SELECT current_balance FROM customer_subscriptions WHERE customer_id = ? AND is_active = 1", (customer_id,))
-            r = cur.fetchone()
-            wallet_balance_before = float(r[0]) if r else 0.0
-
-            if wallet_balance_before > 0:
-                wallet_used = min(wallet_balance_before, final_total)
-
-                if wallet_used > 0:
-                    # Prevent double debit for same bill
-                    cur.execute("""
-                        SELECT 1 FROM subscription_ledger
-                        WHERE bill_id = ? AND txn_type = 'DEBIT'
-                        LIMIT 1
-                    """, (bill_id,))
-                    if not cur.fetchone():
-                        cur.execute("""
-                            INSERT INTO subscription_ledger (customer_id, bill_id, txn_type, amount, notes)
-                            VALUES (?, ?, 'DEBIT', ?, 'Auto wallet deduction on bill')
-                        """, (customer_id, bill_id, wallet_used))
-
-                        cur.execute("""
-                            UPDATE customer_subscriptions
-                            SET current_balance = current_balance - ?,
-                                updated_at = CURRENT_TIMESTAMP
-                            WHERE customer_id = ?
-                        """, (wallet_used, customer_id))
-
-        # Payable after wallet
-        final_total = max(0.0, final_total - wallet_used)
-
         balance_amount = max(0.0, final_total - advance_paid)
+
+        # ---- Subscription Wallet redemption (optional) ----
+        # Rules:
+        #  - Only redeem on NON-subscription bills
+        #  - Debit up to wallet balance and up to final_total
+        use_subscription = str(data.get("useSubscription") or "").lower() in ("on", "1", "true", "yes")
+        requested_use = float(data.get("subscriptionUseAmount") or 0)
+
+        wallet_used = 0.0
+        if use_subscription and requested_use > 0:
+            # First, ensure this bill is not a subscription purchase bill
+            cur.execute(
+                """SELECT 1
+                     FROM bill_items bi
+                     JOIN subscription_products sp
+                       ON sp.service_id = bi.service_id
+                      AND sp.is_active = 1
+                    WHERE bi.bill_id = ?
+                    LIMIT 1""",
+                (bill_id,),
+            )
+            is_sub_bill = bool(cur.fetchone())
+
+            if not is_sub_bill:
+                # Current wallet balance
+                cur.execute(
+                    "SELECT current_balance FROM customer_subscriptions WHERE customer_id = ? AND is_active = 1",
+                    (customer_id,),
+                )
+                wrow = cur.fetchone()
+                wallet_balance = float(wrow[0] or 0.0) if wrow else 0.0
+
+                wallet_used = min(requested_use, wallet_balance, final_total)
+                if wallet_used > 0:
+                    # Idempotency: prevent double debit for same bill
+                    cur.execute(
+                        """SELECT 1 FROM subscription_ledger
+                             WHERE bill_id = ? AND txn_type = 'DEBIT'
+                             LIMIT 1""",
+                        (bill_id,),
+                    )
+                    if not cur.fetchone():
+                        cur.execute(
+                            """INSERT INTO subscription_ledger
+                                   (customer_id, bill_id, txn_type, amount, notes)
+                                 VALUES (?, ?, 'DEBIT', ?, ?)""",
+                            (customer_id, bill_id, wallet_used, f"Wallet used at billing for bill #{bill_id}"),
+                        )
+                        cur.execute(
+                            """UPDATE customer_subscriptions
+                                   SET current_balance = current_balance - ?,
+                                       updated_at = CURRENT_TIMESTAMP
+                                 WHERE customer_id = ?""",
+                            (wallet_used, customer_id),
+                        )
+
+                    # Reduce payable
+                    final_total = max(0.0, final_total - wallet_used)
+                    balance_amount = max(0.0, final_total - advance_paid)
 
         cur.execute(
             """UPDATE bills
@@ -742,43 +951,21 @@ def bill_view(bill_id):
 
     # ✅ Final Bill = Subtotal - Discount + Surcharge
     final_total = max(0.0, subtotal - discount_amount + surcharge_amount)
-        # ✅ Wallet Used (DEBIT) for this bill
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT amount
-        FROM subscription_ledger
-        WHERE bill_id = ?
-          AND txn_type = 'DEBIT'
-        LIMIT 1
-    """, (bill_id,))
-    row_wallet = cur.fetchone()
-    wallet_used = float(row_wallet["amount"]) if row_wallet else 0.0
-
-    # Cap wallet_used to final_total (safety)
-    wallet_used = min(wallet_used, final_total)
-
-    # ✅ Wallet Balance (current remaining balance for customer)
-    cur.execute("""
-        SELECT current_balance
-        FROM customer_subscriptions
-        WHERE customer_id = ?
-    """, (bill["customer_id"],))
-    row_bal = cur.fetchone()
-    wallet_balance = float(row_bal["current_balance"]) if row_bal else 0.0
-
-    conn.close()
-
-    # ✅ Payable after wallet
-    final_payable = max(0.0, final_total - wallet_used)
 
 
     # ✅ Generate QR for final total
     qr_filename = f"qr_{bill_id}.png"
     qr_path = os.path.join("static/qr", qr_filename)
-    generate_upi_qr("freshthreads0549@iob", "Fresh Threads Laundry", final_payable, qr_path)
+    wallet_used = 0.0
+    try:
+        with get_db_connection() as wconn:
+            wallet_used = get_wallet_used_for_bill(wconn, bill_id)
+    except Exception:
+        wallet_used = 0.0
+
+    payable_total = max(0.0, final_total - wallet_used)
+
+    generate_upi_qr("freshthreads0549@iob", "Fresh Threads Laundry", payable_total, qr_path)
         # ✅ Fetch payment status
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -798,10 +985,7 @@ def bill_view(bill_id):
         subtotal=subtotal,
         discount_amount=discount_amount,
         surcharge_amount=surcharge_amount,
-        final_total=final_payable,          # Final Bill (payable after wallet)
-        wallet_used=wallet_used,
-        wallet_balance=wallet_balance,
-
+        final_total=final_total,
     )
 
 @app.route('/invoice/pdf/<int:bill_id>')
@@ -992,50 +1176,24 @@ def cancel_bill():
         return jsonify({"success": False, "message": "Bill ID is required"}), 400
 
     conn = get_db_connection()
-    cur = conn.cursor()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        # Mark void
+        conn.execute("UPDATE bills SET void = 1 WHERE id = ?", (bill_id,))
 
-    # Mark bill as void
-    cur.execute("UPDATE bills SET void = 1 WHERE id = ?", (bill_id,))
+        # If any wallet was used on this bill, reverse it once
+        reversed_amt = reverse_subscription_debit_for_bill(int(bill_id), conn)
 
-    # If wallet was used on this bill, reverse it (idempotent)
-    cur.execute("""
-        SELECT customer_id, amount
-        FROM subscription_ledger
-        WHERE bill_id = ? AND txn_type = 'DEBIT'
-        ORDER BY id ASC
-        LIMIT 1
-    """, (bill_id,))
-    debit_row = cur.fetchone()
-
-    if debit_row:
-        customer_id = int(debit_row["customer_id"])
-        debit_amount = float(debit_row["amount"])
-
-        # Ensure we haven't already reversed
-        cur.execute("""
-            SELECT 1 FROM subscription_ledger
-            WHERE bill_id = ? AND txn_type = 'REVERSAL'
-            LIMIT 1
-        """, (bill_id,))
-        already_reversed = cur.fetchone() is not None
-
-        if not already_reversed and debit_amount > 0:
-            cur.execute("""
-                INSERT INTO subscription_ledger (customer_id, bill_id, txn_type, amount, notes)
-                VALUES (?, ?, 'REVERSAL', ?, 'Wallet reversal on bill cancellation')
-            """, (customer_id, bill_id, debit_amount))
-
-            cur.execute("""
-                UPDATE customer_subscriptions
-                SET current_balance = current_balance + ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE customer_id = ?
-            """, (debit_amount, customer_id))
-
-    conn.commit()
-    conn.close()
-    return jsonify({"success": True, "message": f"Bill #{bill_id} cancelled"})
-
+        conn.commit()
+        msg = f"Bill #{bill_id} cancelled"
+        if reversed_amt and reversed_amt > 0:
+            msg += f" (wallet reversal ₹{reversed_amt:.2f})"
+        return jsonify({"success": True, "message": msg})
+    except sqlite3.OperationalError as e:
+        conn.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        conn.close()
 
 @app.route("/bill/<int:bill_id>/embed")
 @login_required
@@ -1084,36 +1242,45 @@ def outstanding_report():
 
 @app.route("/api/mark-paid", methods=["POST"])
 def mark_paid():
-    bill_id = request.json.get("bill_id")
+    data = request.get_json(silent=True) or {}
+    bill_id = data.get("bill_id")
     if not bill_id:
         return jsonify({"success": False, "message": "bill_id is required"}), 400
 
     conn = get_db_connection()
-    cur = conn.cursor()
     try:
-        cur.execute("UPDATE bill_status SET payment_status = 'Paid' WHERE bill_id = ?", (bill_id,))
-        # Unlock subscription credit if this is a subscription top-up bill
-        credited = apply_subscription_credit_for_bill(bill_id, conn, cur)
+        # Take a write lock early, so we don't collide with other writes (reduces 'database is locked')
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("UPDATE bill_status SET payment_status = 'Paid' WHERE bill_id = ?", (bill_id,))
+
+        # Unlock subscription credit (if this is a subscription bill) using the SAME connection/transaction
+        apply_subscription_credit_for_bill(bill_id, conn=conn)
+
         conn.commit()
-        msg = f"Bill #{bill_id} marked as Paid"
-        if credited and credited > 0:
-            msg += f" (Wallet credited ₹{credited:.2f})"
-        return jsonify({"success": True, "message": msg, "credited": float(credited or 0)})
-    except Exception as e:
+        return jsonify({"success": True, "message": f"Bill #{bill_id} marked as Paid"})
+    except sqlite3.OperationalError as e:
         conn.rollback()
-        raise
+        return jsonify({"success": False, "message": str(e)}), 500
     finally:
         conn.close()
 
-
 @app.route("/api/mark-delivered", methods=["POST"])
 def mark_delivered():
-    bill_id = request.json.get("bill_id")
+    data = request.get_json(silent=True) or {}
+    bill_id = data.get("bill_id")
+    if not bill_id:
+        return jsonify({"success": False, "message": "bill_id is required"}), 400
+
     conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("UPDATE bill_status SET delivery_status = 'Delivered' WHERE bill_id = ?", (bill_id,))
-    conn.commit()
-    return jsonify({"success": True, "message": f"Bill #{bill_id} marked as Delivered"})
+    try:
+        conn.execute("UPDATE bill_status SET delivery_status = 'Delivered' WHERE bill_id = ?", (bill_id,))
+        conn.commit()
+        return jsonify({"success": True, "message": f"Bill #{bill_id} marked as Delivered"})
+    except sqlite3.OperationalError as e:
+        conn.rollback()
+        return jsonify({"success": False, "message": str(e)}), 500
+    finally:
+        conn.close()
 
 @app.route("/outstanding_summary")
 @login_required
@@ -1462,9 +1629,8 @@ def customer_view(token):
 
 @app.route("/api/bill-info/<token>")
 def api_bill_info(token):
-    # if not require_internal_secret():
-    #     return jsonify({"error": "Forbidden"}), 403
-
+    if not require_internal_secret():
+        return jsonify({"error": "Forbidden"}), 403
     conn = get_db_connection()
     cur = conn.cursor()
 
@@ -1476,71 +1642,16 @@ def api_bill_info(token):
     """, (token,)).fetchone()
 
     if not bill:
-        conn.close()
         return jsonify({"error": "Invalid token"}), 404
 
-    items = cur.execute("""
-        SELECT bi.*,
-               s.name AS service_name
-        FROM bill_items bi
-        LEFT JOIN services s ON s.id = bi.service_id
-        WHERE bi.bill_id = ?
-    """, (bill["id"],)).fetchall()
-
-    status = cur.execute(
-        "SELECT payment_status FROM bill_status WHERE bill_id = ?",
-        (bill["id"],)
-    ).fetchone()
-
-    # --- Compute totals (same logic as invoice/pay page) ---
-    subtotal = 0.0
-    for it in items:
-        qty = float(it["qty"] or 0)
-        rate = float(it["rate"] or 0)
-        subtotal += qty * rate
-
-    discount_value = float(bill["discount_value"] or 0)
-    discount_type = (bill["discount_type"] or "Rs")
-    discount_amount = (subtotal * discount_value / 100.0) if discount_type == "%" else discount_value
-
-    surcharge_amount = float(bill["surcharge_amount"] or 0.0)
-    if surcharge_amount == 0 and int(bill["express_service"] or 0) == 1 and float(bill["surcharge_value"] or 0) > 0:
-        s_type = bill["surcharge_type"] or "Rs"
-        s_val = float(bill["surcharge_value"] or 0)
-        surcharge_amount = (subtotal * s_val / 100.0) if s_type == "%" else s_val
-
-    total_before_wallet = max(0.0, subtotal - discount_amount + surcharge_amount)
-
-    # --- Wallet used on this bill (ledger DEBIT) ---
-    row_wallet = cur.execute("""
-        SELECT amount
-        FROM subscription_ledger
-        WHERE bill_id = ? AND txn_type = 'DEBIT'
-        LIMIT 1
-    """, (bill["id"],)).fetchone()
-    wallet_used = float(row_wallet["amount"]) if row_wallet else 0.0
-    wallet_used = min(wallet_used, total_before_wallet)
-
-    # --- Current wallet balance for customer ---
-    row_bal = cur.execute("""
-        SELECT current_balance
-        FROM customer_subscriptions
-        WHERE customer_id = ?
-    """, (bill["customer_id"],)).fetchone()
-    wallet_balance = float(row_bal["current_balance"]) if row_bal else 0.0
-
-    final_payable = max(0.0, total_before_wallet - wallet_used)
-
+    status = cur.execute("SELECT payment_status FROM bill_status WHERE bill_id = ?", (bill["id"],)).fetchone()
+    items = cur.execute("SELECT * FROM bill_items WHERE bill_id = ?", (bill["id"],)).fetchall()
     conn.close()
 
     return jsonify({
         "bill": dict(bill),
         "items": [dict(i) for i in items],
-        "payment_status": status["payment_status"] if status else "Pending",
-        "wallet_used": wallet_used,
-        "wallet_balance": wallet_balance,
-        "final_payable": final_payable,
-        "total_before_wallet": total_before_wallet
+        "payment_status": status["payment_status"] if status else "Pending"
     })
 
 @app.route("/api/expense-types/<int:type_id>", methods=["PUT"])

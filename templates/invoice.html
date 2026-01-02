@@ -150,7 +150,22 @@
                     <td style="text-align: right; white-space: nowrap;">+ ₹{{ "%.2f"|format(surcharge_amount) }}</td>
                 </tr>
                 {% endif %}
-     <tr>
+     
+                {# ✅ Subscription Wallet (optional) #}
+                {% if wallet_used is defined and wallet_used and wallet_used > 0 %}
+                <tr>
+                    <td colspan="3" style="text-align: right;">Wallet Used</td>
+                    <td style="text-align: right; white-space: nowrap;">- ₹{{ "%.2f"|format(wallet_used) }}</td>
+                </tr>
+                  <tr>
+                    <td colspan="3" style="text-align: right;">Wallet Balance</td>
+                    <td style="text-align: right; white-space: nowrap;">₹{{ "%.2f"|format(wallet_balance) }}</td>
+                </tr>
+                {% endif %}
+
+
+
+<tr>
         <td colspan="2" style="font-weight: bold;">Total Items: {{ items | map(attribute='items') | sum }}</td>
         <td style="text-align: right;"><strong>Final Bill</strong></td>
         <td style="text-align: right; white-space: nowrap;"><strong>₹{{ "%.2f"|format(final_total) }}</strong></td>
