@@ -6,6 +6,14 @@
     <link rel="stylesheet" href="/static/css/mobile.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <style>
+        .screen-only{
+            position: sticky;
+            bottom: 0;
+            background: #fff;
+            padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
+            border-top: 1px solid #eee;
+        }
+        
         body {
             font-family: Arial, sans-serif;
             background: #fff;
@@ -29,17 +37,17 @@
         }
         
         .table td, .table th {
-    padding: 2px 4px;
-    vertical-align: top;
-    font-size: 12px;
-    white-space: nowrap;  /* default for all */
-}
-
-.table td:first-child, .table th:first-child {
-    white-space: normal;   /* allow wrapping in Item column */
-    word-break: break-word; /* wrap long words too */
-}
-
+            padding: 2px 4px;
+            vertical-align: top;
+            font-size: 12px;
+            white-space: nowrap;  /* default for all */
+        }
+        
+        .table td:first-child, .table th:first-child {
+            white-space: normal;   /* allow wrapping in Item column */
+            word-break: break-word; /* wrap long words too */
+        }
+        
         
         .table thead th {
             border-bottom: 1px solid #ddd;
@@ -57,9 +65,9 @@
             letter-spacing: 0.3px;
         }
         .text-right {
-    text-align: right;
-}
-
+            text-align: right;
+        }
+        
         @media print {
             .screen-only {
                 display: none !important;
@@ -112,10 +120,10 @@
             <thead>
                 <tr>
                     
-            <th style="width: 45%;">Item</th>
-            <th class="text-right" style="width: 15%; white-space: nowrap;">Qty</th>
-            <th class="text-right" style="width: 20%; white-space: nowrap;">Rate</th>
-            <th class="text-right" style="width: 20%; white-space: nowrap;">Total</th>
+                    <th style="width: 45%;">Item</th>
+                    <th class="text-right" style="width: 15%; white-space: nowrap;">Qty</th>
+                    <th class="text-right" style="width: 20%; white-space: nowrap;">Rate</th>
+                    <th class="text-right" style="width: 20%; white-space: nowrap;">Total</th>
                 </tr>
             </thead>
             <tbody>
@@ -125,8 +133,8 @@
                 <tr>
                     <td>{{ item.service_name }}</td>
                     <td class="text-right">{{ item.items }}</td>
-<td class="text-right">{{ item.rate }}</td>
-<td class="text-right">{{ item.total }}</td>
+                    <td class="text-right">{{ item.rate }}</td>
+                    <td class="text-right">{{ item.total }}</td>
                 </tr>
                 {% set total_qty = total_qty + item.qty %}
                 {% endfor %}
@@ -143,49 +151,49 @@
                     <td style="text-align: right; white-space: nowrap;">- ₹{{ "%.2f"|format(discount_amount) }}</td>
                 </tr>
                 {% endif %}
-
+                
                 {% if surcharge_amount > 0 %}
                 <tr>
                     <td colspan="3" style="text-align: right;">Express Service</td>
                     <td style="text-align: right; white-space: nowrap;">+ ₹{{ "%.2f"|format(surcharge_amount) }}</td>
                 </tr>
                 {% endif %}
-     
+                
                 {# ✅ Subscription Wallet (optional) #}
                 {% if wallet_used is defined and wallet_used and wallet_used > 0 %}
                 <tr>
                     <td colspan="3" style="text-align: right;">Wallet Used</td>
                     <td style="text-align: right; white-space: nowrap;">- ₹{{ "%.2f"|format(wallet_used) }}</td>
                 </tr>
-                  <tr>
+                <tr>
                     <td colspan="3" style="text-align: right;">Wallet Balance</td>
                     <td style="text-align: right; white-space: nowrap;">₹{{ "%.2f"|format(wallet_balance) }}</td>
                 </tr>
                 {% endif %}
-
-
-
-<tr>
-        <td colspan="2" style="font-weight: bold;">Total Items: {{ items | map(attribute='items') | sum }}</td>
-        <td style="text-align: right;"><strong>Final Bill</strong></td>
-        <td style="text-align: right; white-space: nowrap;"><strong>₹{{ "%.2f"|format(final_total) }}</strong></td>
-    </tr>
-
+                
+                
+                
+                <tr>
+                    <td colspan="2" style="font-weight: bold;">Total Items: {{ items | map(attribute='items') | sum }}</td>
+                    <td style="text-align: right;"><strong>Final Bill</strong></td>
+                    <td style="text-align: right; white-space: nowrap;"><strong>₹{{ "%.2f"|format(final_total) }}</strong></td>
+                </tr>
+                
             </tfoot>
         </table>
-
+        
         {# 🚫 Cancelled Bill Handling #}
         {% if bill.is_cancelled %}
         <div style="text-align: center; margin-top: 20px;">
             <span class="badge bg-danger" style="font-size: 16px; padding: 10px 20px;">❌ CANCELLED</span>
         </div>
-
+        
         {% elif not bill.is_paid %}
         <div class="text-center mt-2 screen-only">
             <a href="{{ url_for('edit_bill', bill_id=bill.id) }}" class="btn btn-sm btn-outline-warning">✏️ Edit Bill</a>
         </div>
         {% endif %}
-
+        
         {% if bill.is_paid %}
         <div style="text-align: center; margin-top: 30px;">
             <span class="badge bg-success" style="font-size: 16px; padding: 10px 20px;">✅ PAID</span>
@@ -195,37 +203,37 @@
             <!-- Show QR code only if not cancelled -->
         </div>
         {% endif %}
-<div class="text-center mt-4">
-    <p><strong>Thank you! Visit again 🙏</strong></p>
-
-    <!-- Terms & Conditions - Bill Disclaimer -->
-    <p style="font-size: 9px; color: #555; margin-top: 8px; line-height: 1.3;">
-        All items are accepted subject to our Terms & Conditions displayed at the store and available online.
-    </p>
-
-    <!-- Clickable link for screen, plain text for print -->
-    <p class="screen-only" style="font-size: 9px; margin-top: 2px;">
-        <a href="https://freshthreadslaundry.co.in/terms.html"
-           target="_blank"
-           style="text-decoration: underline; color: inherit;">
-            View full Terms & Conditions
-        </a>
-    </p>
-
-    <p style="font-size: 9px; margin-top: 2px;">
-        www.freshthreadslaundry.co.in/terms.html
-    </p>
-</div>
-       
-<div class="screen-only text-center mt-3">
-    <button id="printOnly" class="btn btn-sm btn-outline-primary">🖨️ Print</button>
-    <button id="whatsappOnly" class="btn btn-sm btn-outline-success ms-2">📤 WhatsApp</button>
-    <a href="/billing" class="btn btn-sm btn-outline-secondary ms-2">🏠 Home</a>
-</div>
-
+        <div class="text-center mt-4">
+            <p><strong>Thank you! Visit again 🙏</strong></p>
+            
+            <!-- Terms & Conditions - Bill Disclaimer -->
+            <p style="font-size: 9px; color: #555; margin-top: 8px; line-height: 1.3;">
+                All items are accepted subject to our Terms & Conditions displayed at the store and available online.
+            </p>
+            
+            <!-- Clickable link for screen, plain text for print -->
+            <p class="screen-only" style="font-size: 9px; margin-top: 2px;">
+                <a href="https://freshthreadslaundry.co.in/terms.html"
+                target="_blank"
+                style="text-decoration: underline; color: inherit;">
+                View full Terms & Conditions
+            </a>
+        </p>
         
+        <p style="font-size: 9px; margin-top: 2px;">
+            www.freshthreadslaundry.co.in/terms.html
+        </p>
     </div>
-    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>  
+    
+    <div class="screen-only text-center mt-3">
+        <button id="printOnly" class="btn btn-sm btn-outline-primary">🖨️ Print</button>
+        <button id="whatsappOnly" class="btn btn-sm btn-outline-success ms-2">📤 WhatsApp</button>
+        <a href="/billing" class="btn btn-sm btn-outline-secondary ms-2">🏠 Home</a>
+    </div>
+    
+    
+</div>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>  
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
     // 🖨️ PRINT ONLY BUTTON
@@ -233,28 +241,28 @@
         e.preventDefault();
         window.print();
     });
-
+    
     // 📤 WHATSAPP BUTTON: Capture, Copy, Open WhatsApp
-
-document.getElementById("whatsappOnly").addEventListener("click", async function (e) {
-    e.preventDefault();
-
-    const customerName = "{{ bill.customer_name }}";
-    const billId = "{{ bill.id }}";
-    const billDateRaw = "{{ bill.formatted_date }}";
-    const safeDate = billDateRaw.replace(/[^a-zA-Z0-9]/g, "-");
-    const fileName = `invoice_${billId}_${safeDate}.png`;
-
-    const rawPhone = "{{ bill.customer_phone|replace('+', '') }}";
-    const phoneWithCountry = `91${rawPhone}`;
-    const upiLink = "upi://pay?pa=freshthreads0549@iob&pn=Fresh%20Threads%20Laundry%and%Dry%Cleaning%Services&am={{ '%.2f'|format(final_total) }}&cu=INR";
-
-    //const upiLink = "upi://pay?pa=ramya.kappeta@axisbank&pn=Ramya Sree Kappeta";
-    const token = "{{ bill.token }}";  // ensure token is passed in context
-
-    //To pay via UPI, click this link: ${upiLink}
-
-    const message = encodeURIComponent(`Dear ${customerName},  
+    
+    document.getElementById("whatsappOnly").addEventListener("click", async function (e) {
+        e.preventDefault();
+        
+        const customerName = "{{ bill.customer_name }}";
+        const billId = "{{ bill.id }}";
+        const billDateRaw = "{{ bill.formatted_date }}";
+        const safeDate = billDateRaw.replace(/[^a-zA-Z0-9]/g, "-");
+        const fileName = `invoice_${billId}_${safeDate}.png`;
+        
+        const rawPhone = "{{ bill.customer_phone|replace('+', '') }}";
+        const phoneWithCountry = `91${rawPhone}`;
+        const upiLink = "upi://pay?pa=freshthreads0549@iob&pn=Fresh%20Threads%20Laundry%and%Dry%Cleaning%Services&am={{ '%.2f'|format(final_total) }}&cu=INR";
+        
+        //const upiLink = "upi://pay?pa=ramya.kappeta@axisbank&pn=Ramya Sree Kappeta";
+        const token = "{{ bill.token }}";  // ensure token is passed in context
+        
+        //To pay via UPI, click this link: ${upiLink}
+        
+        const message = encodeURIComponent(`Dear ${customerName},  
 Thanks for choosing Fresh Threads Laundry.  
 
 🧾 Invoice: https://pay.freshthreadslaundry.co.in/${token}  
@@ -264,35 +272,35 @@ Thanks for choosing Fresh Threads Laundry.
 
 
 FreshThreads 🙏`);
-
-    const whatsappUrl = `https://wa.me/${phoneWithCountry}?text=${message}`;
-
-    // Hide screen-only elements during capture
-    const screenOnlyElems = document.querySelectorAll(".screen-only");
-    screenOnlyElems.forEach(el => el.style.display = "none");
-
-    try {
-        const canvas = await html2canvas(document.querySelector(".invoice-box"));
-        screenOnlyElems.forEach(el => el.style.display = "");
-
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
-        if (!blob) throw new Error("Failed to generate invoice image");
-
-        const item = new ClipboardItem({ "image/png": blob });
-
-        await navigator.clipboard.write([item]);
-
-        //alert("✅ Invoice copied to clipboard.\nNow sending WhatsApp message...");
-        window.open(whatsappUrl, "_blank", "width=800,height=600,noopener,noreferrer");
-
-    } catch (error) {
-        screenOnlyElems.forEach(el => el.style.display = "");
-        alert("❌ Could not copy invoice to clipboard.\nError: " + error.message + "\nYou can still send WhatsApp message.");
-        window.open(whatsappUrl, "_blank", "width=800,height=600,noopener,noreferrer");
-    }
-});
-
-
+        
+        const whatsappUrl = `https://wa.me/${phoneWithCountry}?text=${message}`;
+        
+        // Hide screen-only elements during capture
+        const screenOnlyElems = document.querySelectorAll(".screen-only");
+        screenOnlyElems.forEach(el => el.style.display = "none");
+        
+        try {
+            const canvas = await html2canvas(document.querySelector(".invoice-box"));
+            screenOnlyElems.forEach(el => el.style.display = "");
+            
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+            if (!blob) throw new Error("Failed to generate invoice image");
+            
+            const item = new ClipboardItem({ "image/png": blob });
+            
+            await navigator.clipboard.write([item]);
+            
+            //alert("✅ Invoice copied to clipboard.\nNow sending WhatsApp message...");
+            window.open(whatsappUrl, "_blank", "width=800,height=600,noopener,noreferrer");
+            
+        } catch (error) {
+            screenOnlyElems.forEach(el => el.style.display = "");
+            alert("❌ Could not copy invoice to clipboard.\nError: " + error.message + "\nYou can still send WhatsApp message.");
+            window.open(whatsappUrl, "_blank", "width=800,height=600,noopener,noreferrer");
+        }
+    });
+    
+    
 </script>
 
 </body>
