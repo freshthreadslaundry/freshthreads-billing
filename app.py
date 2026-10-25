@@ -72,7 +72,7 @@ def protect_staff_routes():
             return jsonify(success=False, message='Session expired. Reload the page and try again.'), 403
     if request.endpoint == 'static' and (request.view_args or {}).get('filename', '').split('/')[0] in {'reports', 'invoices'} and 'user' not in session:
         return jsonify(success=False, message='Please log in'), 401
-    if request.endpoint == 'outstanding_report' and session.get('admin_verified_until', 0) < time.time():
+    if request.endpoint == 'outstanding_report' and app.config.get('OUTSTANDING_PASSWORD_REQUIRED', True) and session.get('admin_verified_until', 0) < time.time():
         return jsonify(success=False, message='Enter the admin password to view this report'), 403
 
 

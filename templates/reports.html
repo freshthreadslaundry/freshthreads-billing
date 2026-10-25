@@ -186,6 +186,7 @@
       </div>
     </div>
   </div>
+  {% if config.get('OUTSTANDING_PASSWORD_REQUIRED', True) %}
   <div id="passwordModal" style="display:none; position:fixed; top:30%; left:50%; transform:translate(-50%, -50%); background:#fff; padding:20px; border:1px solid #ccc; box-shadow:0 0 10px #aaa; z-index:1050;">
     <label id="passwordPromptLabel" for="adminPassword">Enter admin password:</label><br>
     <input type="password" id="adminPassword" class="form-control mt-2"><br>
@@ -194,10 +195,12 @@
       <button class="btn btn-secondary" onclick="closePasswordModal()">Cancel</button>
     </div>
   </div>
+  {% endif %}
   <script>
     function escapeText(value) {
       return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
     }
+    {% if config.get('OUTSTANDING_PASSWORD_REQUIRED', True) %}
     function checkAdminPassword(promptText = "Enter admin password:") {
       return new Promise(resolve => {
         const modal = document.getElementById("passwordModal");
@@ -237,6 +240,7 @@
       });
     }
     
+    {% endif %}
     function loadOutstandingReportWithoutPassword() {
       
       const old = document.getElementById("resultsTable");
@@ -423,8 +427,10 @@
                 });
                 
   document.getElementById("runOutstandingBtn").addEventListener("click", async function () {
+{% if config.get('OUTSTANDING_PASSWORD_REQUIRED', True) %}
   const ok = await checkAdminPassword("Enter admin password to view Outstanding Report:");
   if (!ok) return;
+{% endif %}
 
   // clear current views
   const old = document.getElementById("resultsTable");
@@ -487,8 +493,10 @@
 
                     
                     document.getElementById("runOutstandingByCustomerBtn").addEventListener("click", async function () {
+{% if config.get('OUTSTANDING_PASSWORD_REQUIRED', True) %}
                       const ok = await checkAdminPassword("Enter admin password to view Outstanding Report (Grouped):");
                       if (!ok) return;
+{% endif %}
                       
                       // clear
                       document.getElementById("reportResults").innerHTML = "";

@@ -18,6 +18,18 @@ The existing local login and report password were preserved during the fix insta
 
 The app expects the existing database at `database/fresh_threads.db`. It does **not** automatically create or migrate the business database. Restore a known-good backup for a new installation. Never run the test fixture schema against your business database.
 
+## Local staff access
+
+For this computer, `instance/config.py` sets `OUTSTANDING_PASSWORD_REQUIRED = False`. Staff still log in normally, and both outstanding-report views open without a second password. The default remains `True`, so the existing AWS report password stays enabled unless its private configuration is explicitly changed.
+
+To change only the staff login password, activate the environment and run:
+
+```sh
+python configure.py --change-staff-password
+```
+
+Enter the new staff password twice; input stays hidden. The username and stored reports password stay unchanged. Restart the app and log in again. This command changes local private settings only.
+
 ## Change both local passwords
 
 Run `python configure.py --change-passwords` in the activated project environment. Enter and confirm the new staff password, then the new reports password. Input is hidden. Both update together only after confirmation; the username stays the same. Restart the app and log in again. The command refuses to change local passwords when active `FT_*` environment overrides would take precedence.

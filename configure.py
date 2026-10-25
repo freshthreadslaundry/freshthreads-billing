@@ -1,4 +1,4 @@
-"""Create private settings or interactively change both local passwords."""
+"""Create private settings or interactively change local passwords."""
 import argparse
 import ast
 import os
@@ -9,8 +9,11 @@ import secrets
 from werkzeug.security import generate_password_hash
 
 
-def change_passwords(destination):
-    keys = ('LOGIN_PASSWORD_HASH', 'ADMIN_PASSWORD_HASH', 'SECRET_KEY')
+def change_passwords(destination, staff_only=False):
+    selected = [('LOGIN_PASSWORD_HASH', 'staff login')]
+    if not staff_only:
+        selected.append(('ADMIN_PASSWORD_HASH', 'reports'))
+    keys = tuple(key for key, label in selected) + ('SECRET_KEY',)
     if any(os.environ.get('FT_' + key) for key in keys):
         raise SystemExit('Passwords or the session key are overridden by FT_* environment settings. Update those settings instead.')
     if not destination.is_file():
@@ -27,11 +30,11 @@ def change_passwords(destination):
     if set(assignments) != set(keys):
         raise SystemExit('Required private settings are missing. No passwords changed.')
     passwords = {}
-    for key, label in [('LOGIN_PASSWORD_HASH', 'staff login'), ('ADMIN_PASSWORD_HASH', 'reports')]:
+    for key, label in selected:
         password = getpass(f'New {label} password: ')
         confirmation = getpass(f'Confirm new {label} password: ')
         if not password.strip() or password != confirmation:
-            raise SystemExit('Passwords must be nonempty and match. Neither password was changed.')
+            raise SystemExit('Passwords must be nonempty and match. No passwords were changed.')
         passwords[key] = password
     replacements = {key: generate_password_hash(value) for key, value in passwords.items()}
     replacements['SECRET_KEY'] = secrets.token_hex(32)
@@ -50,16 +53,19 @@ def change_passwords(destination):
         os.replace(temporary, destination)
     finally:
         temporary.unlink(missing_ok=True)
-    print('Both passwords updated. Username unchanged. Restart the app and log in again.')
+    changed = 'Staff login password updated.' if staff_only else 'Both passwords updated.'
+    print(changed + ' Username unchanged. Restart the app and log in again.')
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--change-passwords', action='store_true', help='Change both existing local passwords securely')
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--change-passwords', action='store_true', help='Change both existing local passwords securely')
+    group.add_argument('--change-staff-password', action='store_true', help='Change only the existing staff login password securely')
     args = parser.parse_args()
     destination = Path(__file__).resolve().parent / 'instance' / 'config.py'
-    if args.change_passwords:
-        change_passwords(destination)
+    if args.change_passwords or args.change_staff_password:
+        change_passwords(destination, staff_only=args.change_staff_password)
         return
     if destination.exists():
         raise SystemExit('Settings already exist. Edit instance/config.py or use FT_* environment overrides.')

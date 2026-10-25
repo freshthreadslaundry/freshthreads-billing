@@ -32,6 +32,8 @@ class BillingRegressionTests(unittest.TestCase):
         application.DB_PATH = str(Path(self.temp.name) / 'test.db')
         application.app.static_folder = str(Path(self.temp.name) / 'static')
         application.app.config['TESTING'] = True
+        self.addCleanup(application.app.config.update, OUTSTANDING_PASSWORD_REQUIRED=application.app.config.get('OUTSTANDING_PASSWORD_REQUIRED', True))
+        application.app.config['OUTSTANDING_PASSWORD_REQUIRED'] = True
         self.addCleanup(setattr, application, 'DB_PATH', self.old_db)
         self.addCleanup(setattr, application.app, 'static_folder', self.old_static)
         with closing(sqlite3.connect(application.DB_PATH)) as db:
@@ -235,6 +237,25 @@ class BillingRegressionTests(unittest.TestCase):
         self.assertEqual(self.post('/api/verify-password',json={'password':'wrong'}).status_code,403)
         self.assertEqual(self.post('/api/verify-password',json={'password':'test-report-password'}).status_code,200)
         self.assertEqual(self.client.get('/api/outstanding-report').status_code,200)
+
+    def test_local_outstanding_report_needs_only_staff_login(self):
+        application.app.config['OUTSTANDING_PASSWORD_REQUIRED'] = False
+        self.assertEqual(self.client.get('/api/outstanding-report').status_code,200)
+        public_client=application.app.test_client()
+        self.assertEqual(public_client.get('/api/outstanding-report').status_code,401)
+        self.assertEqual(public_client.get('/reports').status_code,302)
+        page=self.client.get('/reports').get_data(as_text=True)
+        self.assertNotIn('passwordModal',page)
+        self.assertNotIn('checkAdminPassword',page)
+        self.assertIn('runOutstandingBtn',page)
+        self.assertIn('runOutstandingByCustomerBtn',page)
+
+    def test_report_password_stays_enabled_when_configured(self):
+        application.app.config['OUTSTANDING_PASSWORD_REQUIRED'] = True
+        self.assertEqual(self.client.get('/api/outstanding-report').status_code,403)
+        page=self.client.get('/reports').get_data(as_text=True)
+        self.assertIn('passwordModal',page)
+        self.assertIn('checkAdminPassword',page)
 
     def test_csrf_and_cross_origin_changes_blocked(self):
         self.assertEqual(self.client.post('/api/cancel-bill',json={'bill_id':1}).status_code,403)
