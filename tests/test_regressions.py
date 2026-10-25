@@ -370,6 +370,20 @@ class BillingRegressionTests(unittest.TestCase):
         self.assertEqual(self.balance(),0)
         self.assertEqual(self.info(bid)['amount_due'],0)
 
+    def test_public_https_origin_works_behind_http_reverse_proxy(self):
+        old = application.app.config.get('PUBLIC_ORIGIN')
+        application.app.config['PUBLIC_ORIGIN'] = 'https://staff.example.test'
+        try:
+            response = self.client.post('/api/verify-password', json={'password':'test-report-password'},
+                headers={'X-CSRF-Token':'test-csrf','Origin':'https://staff.example.test'})
+            self.assertEqual(response.status_code,200)
+            response = self.client.post('/api/verify-password', json={'password':'test-report-password'},
+                headers={'X-CSRF-Token':'test-csrf','Origin':'https://attacker.example.test'})
+            self.assertEqual(response.status_code,403)
+        finally:
+            if old is None: application.app.config.pop('PUBLIC_ORIGIN',None)
+            else: application.app.config['PUBLIC_ORIGIN']=old
+
     def test_fake_generation_endpoint_does_not_claim_saved_bill(self):
         response=self.post('/api/generate-bill',json={})
         self.assertEqual(response.status_code,501)

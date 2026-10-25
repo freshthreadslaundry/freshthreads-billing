@@ -46,7 +46,7 @@ if missing_settings:
 app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax')
 if os.environ.get('FT_COOKIE_SECURE') == '1':
     app.config['SESSION_COOKIE_SECURE'] = True
-public_origins = [x.strip() for x in os.environ.get('FT_PUBLIC_ORIGINS', '').split(',') if x.strip()]
+public_origins = [x.strip() for x in os.environ.get('FT_PUBLIC_ORIGINS', app.config.get('PUBLIC_ORIGINS', '')).split(',') if x.strip()]
 if public_origins:
     CORS(app, resources={r'/api/bill-info/*': {'origins': public_origins}})
 
@@ -62,7 +62,8 @@ def protect_staff_routes():
     # Reject browser requests initiated by a different origin, including login CSRF.
     if request.method in {'POST', 'PUT', 'DELETE', 'PATCH'}:
         origin = request.headers.get('Origin')
-        if request.headers.get('Sec-Fetch-Site') == 'cross-site' or (origin and origin.rstrip('/') != request.host_url.rstrip('/')):
+        expected_origin = os.environ.get('FT_PUBLIC_ORIGIN') or app.config.get('PUBLIC_ORIGIN') or request.host_url
+        if request.headers.get('Sec-Fetch-Site') == 'cross-site' or (origin and origin.rstrip('/') != expected_origin.rstrip('/')):
             return jsonify(success=False, message='Cross-origin changes are not allowed'), 403
     if request.method in {'POST', 'PUT', 'DELETE', 'PATCH'}:
         supplied = request.headers.get('X-CSRF-Token') or request.form.get('csrf_token') or ''

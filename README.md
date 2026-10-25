@@ -32,7 +32,10 @@ Environment values override the private local settings:
 - `FT_ADMIN_PASSWORD_HASH`: Werkzeug password hash for the outstanding-report password.
 - `FT_DB_PATH`: optional absolute database path.
 - `FT_COOKIE_SECURE=1`: set when served through HTTPS.
+- `FT_PUBLIC_ORIGIN`: the exact public staff URL when HTTPS terminates at a reverse proxy (for example, `https://sta.freshthreadslaundry.co.in`). This lets request protection validate the real browser origin even when the proxy connects to Flask over HTTP.
 - `FT_PUBLIC_ORIGINS`: comma-separated exact origins for the separate customer invoice site. Needed only for cross-origin browser requests to `/api/bill-info/<token>`. No cross-origin access is granted to staff APIs.
+
+Private configuration can also set `PUBLIC_ORIGIN`, `PUBLIC_ORIGINS`, and `SESSION_COOKIE_SECURE=True` when using a graceful worker reload without changing service environment variables.
 
 For the payment website currently linked by the invoices, configure `FT_PUBLIC_ORIGINS=https://pay.freshthreadslaundry.co.in` on the backend. Add any other real customer-site origin explicitly if used. The local settings file is not uploaded by Git, so configure these secrets on the server before deploying this version.
 
