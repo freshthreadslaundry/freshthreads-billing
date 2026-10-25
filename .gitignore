@@ -3,3 +3,16 @@ database/fresh_threads.db
 
 # Ignore generated QR code images
 static/qr/
+# Private settings and local fix backups
+instance/
+.fix-backups/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+database/*-wal
+database/*-shm
+static/reports/
+static/invoices/
+venv/
+database/*.db

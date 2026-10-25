@@ -150,6 +150,12 @@
             <td colspan="3" class="text-right">Total</td>
             <td class="text-right">₹{{ "%.2f"|format(subtotal) }}</td>
         </tr>
+        {% if surcharge_amount > 0 %}
+        <tr><td colspan="3">Express Service</td><td>₹{{ "%.2f"|format(surcharge_amount) }}</td></tr>
+        {% endif %}
+        {% if wallet_used > 0 %}
+        <tr><td colspan="3">Wallet Used</td><td>- ₹{{ "%.2f"|format(wallet_used) }}</td></tr>
+        {% endif %}
         {% if discount_amount > 0 %}
         <tr>
             <td colspan="3" class="text-right">Discount</td>
@@ -161,26 +167,26 @@
             <td class="text-right"><strong>Final Bill</strong></td>
             <td class="text-right"><strong>₹{{ "%.2f"|format(final_total) }}</strong></td>
         </tr>
+
+        <tr><td colspan="3" style="text-align:right">Advance Paid</td><td style="text-align:right">₹{{ "%.2f"|format(advance_paid) }}</td></tr>
+        <tr><td colspan="3" style="text-align:right"><strong>Amount Due</strong></td><td style="text-align:right"><strong>₹{{ "%.2f"|format(amount_due) }}</strong></td></tr>
         </tfoot>
     </table>
 
-    {% if bill.is_paid %}
+    {% if bill.is_cancelled %}
+    <div class="text-center mt-3"><strong>CANCELLED — no payment due</strong></div>
+    {% elif bill.is_paid %}
     <div class="text-center mt-3">
         <span class="badge badge-paid">✅ PAID</span>
     </div>
-    {% else %}
+    {% elif amount_due > 0 %}
     <div class="text-center mt-3">
         <script>
             const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
-            const upiLink = "upi://pay?pa=freshthreads0549@iob&pn=Fresh%20Threads%20Laundry&am={{ '%.2f'|format(final_total) }}&cu=INR";
+            const upiLink = "upi://pay?pa=freshthreads0549@iob&pn=Fresh%20Threads%20Laundry&am={{ '%.2f'|format(amount_due) }}&cu=INR";
 
             if (isMobile) {
                 document.write(`<button class="btn-pay" onclick="window.location.href='${upiLink}'">Pay Now</button>`);
-            } else {
-                document.write(`<div class='qr-box'>
-                    <p><strong>Scan to Pay</strong></p>
-                    <img src="{{ url_for('static', filename='qr/' + qr_image) }}" alt="QR Code">
-                </div>`);
             }
         </script>
     </div>

@@ -25,11 +25,13 @@
     </tbody>
   </table>
   <div class="text-end">
-    <p><strong>Total:</strong> ₹{{ bill.total }}</p>
-    {% if bill.discount_value %}
-    <p><strong>Discount:</strong> ₹{{ bill.discount_value }}</p>
-    {% endif %}
-    <p><strong>Final Amount:</strong> ₹{{ bill.balance_amount }}</p>
+    <p>Subtotal: ₹{{ '%.2f'|format(subtotal) }}</p>
+    <p>Discount: ₹{{ '%.2f'|format(discount_amount) }}</p>
+    <p>Express Charge: ₹{{ '%.2f'|format(surcharge_amount) }}</p>
+    <p>Wallet Used: ₹{{ '%.2f'|format(wallet_used) }}</p>
+    <p>Final Bill: ₹{{ '%.2f'|format(final_total) }}</p>
+    <p>Advance Paid: ₹{{ '%.2f'|format(advance_paid) }}</p>
+    <p><strong>Amount Due: ₹{{ '%.2f'|format(amount_due) }}</strong></p>
     {% if bill.void %}
 <div class="cancelled-watermark">CANCELLED</div>
 {% endif %}

@@ -195,6 +195,9 @@
     </div>
   </div>
   <script>
+    function escapeText(value) {
+      return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    }
     function checkAdminPassword(promptText = "Enter admin password:") {
       return new Promise(resolve => {
         const modal = document.getElementById("passwordModal");
@@ -208,7 +211,7 @@
         
         window.submitPassword = async function () {
           const password = input.value;
-          closePasswordModal();
+          modal.style.display = "none";
           
           if (!password) return resolve(false);
           
@@ -229,6 +232,7 @@
         
         window.closePasswordModal = function () {
           modal.style.display = "none";
+          resolve(false);
         };
       });
     }
@@ -268,8 +272,8 @@
             for (const row of data) {
               html += `<tr>
                         <td><a href="/bill/${row.bill_id}" target="_blank">#${row.bill_id}</a></td>
-                        <td>${row.customer_name}</td>
-                        <td>${row.customer_phone}</td>
+                        <td>${escapeText(row.customer_name)}</td>
+                        <td>${escapeText(row.customer_phone)}</td>
                         <td>${row.items}</td>
                         <td>${row.balance_amount}</td>
                         <td>${formatDate(row.delivery_date)}</td>
@@ -397,7 +401,7 @@
         <td>${showBillId ? `<a href="/bill/${row.bill_id}" target="_blank">#${row.bill_id}</a>` : ''}</td>
         <td>${showBillId ? row.customer_name : ''}</td>
         <td>${showBillId ? row.customer_phone : ''}</td>
-        <td>${row.service_name}</td>
+        <td>${escapeText(row.service_name)}</td>
         <td>${row.items}</td>
         <td>${row.rate}</td>
         <td>${row.total}</td>
@@ -458,8 +462,8 @@
         for (const row of data) {
           html += `<tr>
             <td><a href="/bill/${row.bill_id}" target="_blank">#${row.bill_id}</a></td>
-            <td>${row.customer_name}</td>
-            <td>${row.customer_phone}</td>
+            <td>${escapeText(row.customer_name)}</td>
+            <td>${escapeText(row.customer_phone)}</td>
             <td>${row.items}</td>
             <td>${row.balance_amount}</td>
             <td>${formatDate(row.delivery_date)}</td>
@@ -538,7 +542,7 @@ sortedEntries.forEach(([uid, group], idx) => {
                 data-bs-toggle="collapse" data-bs-target="#collapse-${custId}"
                 aria-expanded="false" aria-controls="collapse-${custId}">
           <div class="w-100 d-flex justify-content-between align-items-center">
-            <span class="fw-semibold">${customerLabel}</span>
+            <span class="fw-semibold">${escapeText(customerLabel)}</span>
             <span class="badge bg-warning text-dark ms-3">₹${totalDue.toLocaleString("en-IN")}</span>
           </div>
         </button>
@@ -562,7 +566,7 @@ sortedEntries.forEach(([uid, group], idx) => {
                 ${bills.map(row => `
                   <tr>
                     <td><a href="/bill/${row.bill_id}" target="_blank">#${row.bill_id}</a></td>
-                    <td>${row.customer_phone || ""}</td>
+                    <td>${escapeText(row.customer_phone || "")}</td>
                     <td>${row.items}</td>
                     <td>${row.balance_amount}</td>
                     <td>${formatDate(row.delivery_date)}</td>
@@ -666,8 +670,10 @@ document.getElementById("reportResults").innerHTML = html;
                       .then(res => res.json())
                       .then(response => {
                         alert(response.message);
-                        const modal = bootstrap.Modal.getInstance(document.getElementById("billPreviewModal"));
-                        modal.hide();
+                        if (response.success) {
+                          const modal = bootstrap.Modal.getInstance(document.getElementById("billPreviewModal"));
+                          modal.hide();
+                        }
                       })
                       .catch(err => {
                         console.error(err);
@@ -808,9 +814,9 @@ document.getElementById("reportResults").innerHTML = html;
                                 total += parseFloat(row.amount);
                                 html += `<tr>
 <td>${row.date}</td>
-<td>${row.type}</td>
+<td>${escapeText(row.type)}</td>
 <td class="text-end">₹${parseFloat(row.amount).toLocaleString()}</td>
-<td>${row.notes || ""}</td>
+<td>${escapeText(row.notes || "")}</td>
 </tr>`;
                                 });
                                 

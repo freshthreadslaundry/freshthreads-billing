@@ -44,7 +44,7 @@
                 <td>{{ '%.2f' | format(service.rate) }}</td>
                 <td>
                     <a href="/services?edit={{ service.id }}" class="btn btn-sm btn-warning">Edit</a>
-                    <a href="/services?delete={{ service.id }}" class="btn btn-sm btn-danger" onclick="return confirm('Delete this service?')">Delete</a>
+                    <form method="post" class="d-inline" onsubmit="return confirm('Delete this service?')"><input type="hidden" name="action" value="delete"><input type="hidden" name="service_id" value="{{ service.id }}"><button class="btn btn-sm btn-danger" type="submit">Delete</button></form>
                 </td>
             </tr>
             {% endfor %}

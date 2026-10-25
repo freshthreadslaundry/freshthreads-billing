@@ -1,5 +1,12 @@
-from flask import Flask, render_template, request, redirect, url_for, send_file, session, flash
+from flask import g, abort, Flask, render_template, request, redirect, url_for, send_file, session, flash
 from functools import wraps
+from pathlib import Path
+from io import BytesIO
+from urllib.parse import urlencode
+from werkzeug.security import check_password_hash
+from billing_math import number, money, totals
+import time
+import re
 import sqlite3
 from datetime import date, datetime as _dt_datetime
 
@@ -13,7 +20,7 @@ from flask import jsonify
 import qrcode
 import os
 from flask import render_template, send_from_directory
-import pdfkit
+from invoice_pdf import create_invoice_pdf
 import os
 import pandas as pd
 import secrets
@@ -22,19 +29,78 @@ from flask_cors import CORS
 
 
 
-ADMIN_PASSWORD = "123"  # Change this as needed
 # === Customer Insights thresholds (tune anytime) ===
 VIP_MIN_SPEND = 5000          # ₹ threshold for VIP / review candidates
 LAPSED_DAYS = 45              # inactive if not visited in N days
 MIN_VISITS_FOR_REVIEW = 2     # prefer repeat customers for review ask
 
-app = Flask(__name__)
-app.secret_key = 'supersecretkey'  # Replace with a strong secret in production
-CORS(app, resources={r"/api/*": {"origins": "*"}})  # allow cross-origin calls from Netlify
-# Simple user store (can be expanded later)
-USERS = {
-    'admin': 'password123'  # Change this to your preferred username and password
-}
+app = Flask(__name__, instance_relative_config=True)
+# Deployment settings live outside version control. Environment overrides local config.
+app.config.from_pyfile('config.py', silent=True)
+for setting in ('SECRET_KEY', 'LOGIN_USERNAME', 'LOGIN_PASSWORD_HASH', 'ADMIN_PASSWORD_HASH'):
+    if os.environ.get('FT_' + setting):
+        app.config[setting] = os.environ['FT_' + setting]
+missing_settings = [key for key in ('SECRET_KEY', 'LOGIN_USERNAME', 'LOGIN_PASSWORD_HASH', 'ADMIN_PASSWORD_HASH') if not app.config.get(key)]
+if missing_settings:
+    raise RuntimeError('Missing private settings: ' + ', '.join(missing_settings) + '. See README.md')
+app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax')
+if os.environ.get('FT_COOKIE_SECURE') == '1':
+    app.config['SESSION_COOKIE_SECURE'] = True
+public_origins = [x.strip() for x in os.environ.get('FT_PUBLIC_ORIGINS', '').split(',') if x.strip()]
+if public_origins:
+    CORS(app, resources={r'/api/bill-info/*': {'origins': public_origins}})
+
+
+@app.before_request
+def protect_staff_routes():
+    # Token-scoped customer invoices remain public. All other business data is staff-only.
+    public = {'login', 'customer_view', 'api_bill_info', 'static'}
+    if request.endpoint and request.endpoint not in public and 'user' not in session:
+        if request.path.startswith('/api/') or request.endpoint in {'outstanding_summary', 'export_report', 'export_daily'}:
+            return jsonify(success=False, message='Please log in'), 401
+        return redirect(url_for('login'))
+    # Reject browser requests initiated by a different origin, including login CSRF.
+    if request.method in {'POST', 'PUT', 'DELETE', 'PATCH'}:
+        origin = request.headers.get('Origin')
+        if request.headers.get('Sec-Fetch-Site') == 'cross-site' or (origin and origin.rstrip('/') != request.host_url.rstrip('/')):
+            return jsonify(success=False, message='Cross-origin changes are not allowed'), 403
+    if request.method in {'POST', 'PUT', 'DELETE', 'PATCH'}:
+        supplied = request.headers.get('X-CSRF-Token') or request.form.get('csrf_token') or ''
+        expected = session.get('csrf_token', '')
+        if not expected or not secrets.compare_digest(supplied, expected):
+            return jsonify(success=False, message='Session expired. Reload the page and try again.'), 403
+    if request.endpoint == 'static' and (request.view_args or {}).get('filename', '').split('/')[0] in {'reports', 'invoices'} and 'user' not in session:
+        return jsonify(success=False, message='Please log in'), 401
+    if request.endpoint == 'outstanding_report' and session.get('admin_verified_until', 0) < time.time():
+        return jsonify(success=False, message='Enter the admin password to view this report'), 403
+
+
+@app.errorhandler(sqlite3.IntegrityError)
+def invalid_database_change(error):
+    if request.path.startswith('/api/'):
+        return jsonify(success=False, error='Change was not saved. Check that the record exists and is not in use or duplicated.'), 400
+    return 'Change was not saved. Check the record and try again.', 400
+
+
+@app.after_request
+def attach_request_security(response):
+    if response.mimetype == 'text/html' and not response.direct_passthrough:
+        html = response.get_data(as_text=True)
+        token = session.setdefault('csrf_token', secrets.token_hex(32))
+        def secure_form(match):
+            tag = match.group(0)
+            if re.search(r'method\s*=\s*[\"\']?post', tag, re.I):
+                return tag + f'<input type="hidden" name="csrf_token" value="{token}">'
+            return tag
+        html = re.sub(r'<form\b[^>]*>', secure_form, html, flags=re.I)
+        if '</head>' in html:
+            guard = f'<meta name="csrf-token" content="{token}"><script src="/static/request_security.js"></script>'
+            html = html.replace('</head>', guard + '</head>', 1)
+        response.set_data(html)
+    response.headers['Cache-Control'] = 'no-store'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
+
 
 def require_internal_secret():
     expected = os.environ.get("FT_INTERNAL_SECRET", "")
@@ -54,10 +120,11 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-DB_PATH = "database/fresh_threads.db"
+DB_PATH = os.environ.get("FT_DB_PATH", str(Path(__file__).resolve().parent / "database" / "fresh_threads.db"))
 
 def generate_upi_qr(upi_id, name, amount, qr_path):
-    upi_url = f"upi://pay?pa={upi_id}&pn={name}&am={amount:.2f}&cu=INR"
+    Path(qr_path).parent.mkdir(parents=True, exist_ok=True)
+    upi_url = "upi://pay?" + urlencode({"pa": upi_id, "pn": name, "am": f"{amount:.2f}", "cu": "INR"})
     img = qrcode.make(upi_url)
     img.save(qr_path)
 
@@ -122,8 +189,8 @@ def api_services():
     query = request.args.get("q", "")
     with get_db_connection() as conn:
         rows = conn.execute("""
-            SELECT * FROM services
-            WHERE name LIKE ?
+            SELECT s.*, EXISTS(SELECT 1 FROM subscription_products sp WHERE sp.service_id=s.id AND sp.is_active=1) AS is_subscription_topup FROM services s
+            WHERE s.name LIKE ?
             LIMIT 10
         """, (f"%{query}%",)).fetchall()
     return jsonify([dict(row) for row in rows])
@@ -140,13 +207,24 @@ def get_db_connection():
     except Exception:
         pass
     cur.execute("PRAGMA busy_timeout = 30000;")
+    if request:
+        g.setdefault('db_connections', []).append(conn)
     return conn
+
+
+@app.teardown_request
+def close_connections(error=None):
+    for connection in g.pop('db_connections', []):
+        connection.close()  # Also rolls back any incomplete transaction.
+
 
 def apply_subscription_credit_for_bill(bill_id, conn, cur):
     """If the bill contains subscription top-up service(s) and is Paid, credit the customer's wallet.
     Idempotent: will not double-credit the same bill.
     Uses the provided conn/cur (same transaction) to avoid DB locks.
     """
+    if not cur.execute("SELECT 1 FROM bills WHERE id=? AND IFNULL(void,0)=0", (bill_id,)).fetchone():
+        return 0.0
     # Check bill is marked Paid
     cur.execute("SELECT payment_status FROM bill_status WHERE bill_id = ?", (bill_id,))
     s = cur.fetchone()
@@ -179,12 +257,11 @@ def apply_subscription_credit_for_bill(bill_id, conn, cur):
         return 0.0
 
     customer_id = rows[0]["customer_id"]
-    total_credit = 0.0
+    total_credit = money(0)
     for r in rows:
-        qty = float(r["qty"] or 0)
-        credit = float(r["credit_amount"] or 0)
-        total_credit += qty * credit
+        total_credit += number(r["qty"]) * number(r["credit_amount"])
 
+    total_credit = float(money(total_credit))
     if total_credit <= 0:
         return 0.0
 
@@ -210,7 +287,7 @@ def apply_subscription_credit_for_bill(bill_id, conn, cur):
     cur.execute(
         """
         UPDATE customer_subscriptions
-        SET current_balance = current_balance + ?,
+        SET current_balance = ROUND(current_balance + ?, 2),
             updated_at = CURRENT_TIMESTAMP
         WHERE customer_id = ?
         """,
@@ -232,11 +309,25 @@ def services():
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
+        if request.args.get('delete'):
+            return 'Delete requires a POST request', 405
+        if request.method == 'POST' and request.form.get('action') == 'delete':
+            try:
+                conn.execute('DELETE FROM services WHERE id=?', (request.form.get('service_id'),))
+                conn.commit()
+            except sqlite3.IntegrityError:
+                return 'This service is used by existing bills and cannot be deleted', 409
+            return redirect('/services')
         # Save service (insert or update)
         if request.method == "POST":
             service_id = request.form.get("service_id")
             name = request.form.get("name")
-            rate = float(request.form.get("rate"))
+            try:
+                rate = float(money(request.form.get('rate')))
+                if not (name or '').strip():
+                    raise ValueError('Service name is required')
+            except ValueError as exc:
+                return str(exc), 400
 
             if service_id:
                 cursor.execute("UPDATE services SET name = ?, rate = ? WHERE id = ?", (name, rate, service_id))
@@ -251,13 +342,6 @@ def services():
             edit_service = conn.execute("SELECT * FROM services WHERE id = ?", (service_id,)).fetchone()
         else:
             edit_service = None
-
-        # Delete
-        if request.args.get("delete"):
-            service_id = request.args.get("delete")
-            conn.execute("DELETE FROM services WHERE id = ?", (service_id,))
-            conn.commit()
-            return redirect("/services")
 
         services = conn.execute("SELECT * FROM services ORDER BY name").fetchall()
 
@@ -301,12 +385,8 @@ def customers():
             edit_id = request.args.get("edit")
             edit_customer = conn.execute("SELECT * FROM customers WHERE id = ?", (edit_id,)).fetchone()
 
-        # Handle delete
-        if request.args.get("delete"):
-            del_id = request.args.get("delete")
-            conn.execute("DELETE FROM customers WHERE id = ?", (del_id,))
-            conn.commit()
-            return redirect(url_for("customers", view=view, q=q))
+        if request.args.get('delete'):
+            return 'Customer deletion is not supported through a link', 405
 
         # --- Customer stats (spend, visits, last visit, etc.) ---
         # Note: bills.total is your stored subtotal. We exclude void bills.
@@ -315,7 +395,7 @@ def customers():
             SELECT
                 c.id, c.name, c.phone, c.email_address, c.address, c.customer_type,
                 c.review_requested, c.review_stars,
-                COUNT(b.id) AS visit_count,
+                COUNT(CASE WHEN IFNULL(b.void,0) != 1 THEN b.id END) AS visit_count,
                 COALESCE(SUM(CASE WHEN IFNULL(b.void,0) != 1 THEN b.total ELSE 0 END), 0) AS total_spend,
                 MAX(CASE WHEN IFNULL(b.void,0) != 1 THEN DATE(b.date) ELSE NULL END) AS last_visit
             FROM customers c
@@ -394,6 +474,7 @@ def customers():
             JOIN bills b ON b.customer_id = c.id
             WHERE IFNULL(b.void,0) != 1
               AND STRFTIME('%Y-%m', b.date) = STRFTIME('%Y-%m', 'now')
+              AND NOT EXISTS (SELECT 1 FROM bills earlier WHERE earlier.customer_id=c.id AND IFNULL(earlier.void,0)=0 AND DATE(earlier.date)<DATE('now','start of month'))
         """).fetchone()[0]
 
         repeat = conn.execute("""
@@ -486,351 +567,278 @@ def billing():
     if request.method == "POST":
         data = request.form
 
+        try:
+            validated_items = []
+            names, quantities, rates_in = data.getlist('service[]'), data.getlist('qty[]'), data.getlist('rate[]')
+            if not names or len(names) != len(quantities) or len(names) != len(rates_in):
+                raise ValueError('Each service needs a quantity and rate')
+            for name_in, qty_in, rate_in in zip(names, quantities, rates_in):
+                qty_n, rate_n = number(qty_in, 'Quantity'), money(rate_in)
+                if not name_in.strip() or qty_n <= 0:
+                    raise ValueError('Service name and positive quantity are required')
+                validated_items.append((float(qty_n), float(rate_n), float(money(qty_n * rate_n))))
+            for field in ('discountValue', 'surchargeValue', 'advancePaid'):
+                number(data.get(field), field)
+            for field in ('discount', 'surcharge'):
+                if data.get(field + 'Type', 'Amount') not in ('%', 'Rs', 'Amount'):
+                    raise ValueError('Invalid discount or surcharge type')
+                if data.get(field + 'Type') == '%' and number(data.get(field + 'Value')) > 100:
+                    raise ValueError('Percentage must be between 0 and 100')
+            for piece in data.getlist('pieces[]'):
+                if piece and (number(piece, 'Pieces') != int(number(piece, 'Pieces'))):
+                    raise ValueError('Pieces must be a whole number')
+            if not (data.get('customerPhone') or '').strip() or not (data.get('customerName') or '').strip():
+                raise ValueError('Customer name and phone are required')
+        except ValueError as exc:
+            return str(exc), 400
+
         # Customer handling
         phone = data.get("customerPhone").strip()
         name = data.get("customerName").strip()
-        pickup_address = data.get("pickupAddress").strip()
+        pickup_address = (data.get("pickupAddress") or "").strip()
 
         conn = get_db_connection()
-        cur = conn.cursor()
+        try:
+            cur = conn.cursor()
+            cur.execute("BEGIN IMMEDIATE")
 
-        cur.execute("SELECT id FROM customers WHERE phone = ?", (phone,))
-        row = cur.fetchone()
-        if row:
-            customer_id = row[0]
-            cur.execute("UPDATE customers SET name=?, address=? WHERE id=?", (name, pickup_address, customer_id))
-        else:
-            cur.execute("INSERT INTO customers (name, phone, address) VALUES (?, ?, ?)", (name, phone, pickup_address))
-            customer_id = cur.lastrowid
-
-        # Collect billing fields
-        order_type = data.get("orderType", "Walk-in")
-        delivery_date = data.get("deliveryDate")
-
-        discount_type = data.get("discountType", "Amount")
-        discount_value = float(data.get("discountValue") or 0)
-
-        # Express / Surcharge (bill-level)
-        express_service = 1 if data.get("expressService") in ("on", "1", "true", "yes") else 0
-        surcharge_type = data.get("surchargeType", "Rs")  # "Rs" or "%"
-        surcharge_value = float(data.get("surchargeValue") or 0)
-
-        advance_paid = float(data.get("advancePaid") or 0)
-
-        token = secrets.token_urlsafe(10)
-        cur.execute("""
-            INSERT INTO bills (
-                customer_id, date, total, pickup_date, pickup_time,
-                delivery_date, dropoff_time, pickup_address,
-                order_type, discount_type, discount_value,
-                express_service, surcharge_type, surcharge_value, surcharge_amount,
-                advance_paid, balance_amount, token
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, ( 
-            customer_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            0, "", "", delivery_date, "", pickup_address,
-            order_type, discount_type, discount_value,
-            express_service, surcharge_type, surcharge_value, 0,
-            advance_paid, 0, token
-        ))
-
-        bill_id = cur.lastrowid
-
-        # Read checkbox value
-        is_paid = "isPaid" in data
-        payment_status = "Paid" if is_paid else "Pending"
-        delivery_status = "Not Delivered"
-
-        # Insert into bill_status
-        cur.execute("""
-            INSERT INTO bill_status (bill_id, payment_status, delivery_status)
-            VALUES (?, ?, ?)
-        """, (bill_id, payment_status, delivery_status))
-
-        # Add services
-        services = data.getlist("service[]")
-        qtys = data.getlist("qty[]")
-        rates = data.getlist("rate[]")
-        totals = data.getlist("total[]")
-        pieces_list = data.getlist("pieces[]")
-
-        grand_total = 0
-        for i in range(len(services)):
-            name = services[i]
-            qty = float(qtys[i] or 0)
-            rate = float(rates[i] or 0)
-            total = float(totals[i] or 0)
-            grand_total += total
-            original_name = name.strip()
-            # Get pieces[] and conditionally append
-
-            cur.execute("SELECT id FROM services WHERE name = ?", (original_name,))
-            service_row = cur.fetchone()
-            service_id = service_row[0] if service_row else None
-
-            pieces = pieces_list[i] if i < len(pieces_list) else ""
-            if "kg" in name.lower() and pieces.strip():
-                name = f"{name} ({qty:.1f} KG)"
-                items = int(pieces.strip())
+            cur.execute("SELECT id FROM customers WHERE phone = ?", (phone,))
+            row = cur.fetchone()
+            if row:
+                customer_id = row[0]
+                cur.execute("UPDATE customers SET name=?, address=? WHERE id=?", (name, pickup_address, customer_id))
             else:
-                items = int(qty)
+                cur.execute("INSERT INTO customers (name, phone, address) VALUES (?, ?, ?)", (name, phone, pickup_address))
+                customer_id = cur.lastrowid
 
+            # Collect billing fields
+            order_type = data.get("orderType", "Walk-in")
+            delivery_date = data.get("deliveryDate")
+
+            discount_type = data.get("discountType", "Amount")
+            discount_value = float(data.get("discountValue") or 0)
+
+            # Express / Surcharge (bill-level)
+            express_service = 1 if data.get("expressService") in ("on", "1", "true", "yes") else 0
+            surcharge_type = data.get("surchargeType", "Rs")  # "Rs" or "%"
+            surcharge_value = float(data.get("surchargeValue") or 0)
+
+            advance_paid = float(data.get("advancePaid") or 0)
+
+            token = secrets.token_urlsafe(10)
             cur.execute("""
-                INSERT INTO bill_items (bill_id, service_id, service_name, qty, rate, total, items)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (bill_id, service_id, name, qty, rate, total, items))
+                INSERT INTO bills (
+                    customer_id, date, total, pickup_date, pickup_time,
+                    delivery_date, dropoff_time, pickup_address,
+                    order_type, discount_type, discount_value,
+                    express_service, surcharge_type, surcharge_value, surcharge_amount,
+                    advance_paid, balance_amount, token
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                customer_id, datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                0, "", "", delivery_date, "", pickup_address,
+                order_type, discount_type, discount_value,
+                express_service, surcharge_type, surcharge_value, 0,
+                advance_paid, 0, token
+            ))
+
+            bill_id = cur.lastrowid
+
+            # Read checkbox value
+            is_paid = "isPaid" in data
+            payment_status = "Paid" if is_paid else "Pending"
+            delivery_status = "Not Delivered"
+
+            # Insert into bill_status
+            cur.execute("""
+                INSERT INTO bill_status (bill_id, payment_status, delivery_status)
+                VALUES (?, ?, ?)
+            """, (bill_id, payment_status, delivery_status))
+
+            # Add services
+            services = data.getlist("service[]")
+            qtys = data.getlist("qty[]")
+            rates = data.getlist("rate[]")
+            posted_totals = data.getlist("total[]")
+            pieces_list = data.getlist("pieces[]")
+
+            grand_total = 0
+            for i in range(len(services)):
+                name = services[i]
+                qty, rate, total = validated_items[i]
+                grand_total += total
+                original_name = name.strip()
+                # Get pieces[] and conditionally append
+
+                cur.execute("SELECT id FROM services WHERE name = ?", (original_name,))
+                service_row = cur.fetchone()
+                service_id = service_row[0] if service_row else None
+
+                pieces = pieces_list[i] if i < len(pieces_list) else ""
+                if "kg" in name.lower() and pieces.strip():
+                    name = f"{name} ({qty:.1f} KG)"
+                    items = int(pieces.strip())
+                else:
+                    items = int(qty)
+
+                cur.execute("""
+                    INSERT INTO bill_items (bill_id, service_id, service_name, qty, rate, total, items)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (bill_id, service_id, name, qty, rate, total, items))
 
 
-        # ---- Bill-level totals (server-side truth) ----
-        subtotal = grand_total
+            # ---- Bill-level totals (server-side truth) ----
+            subtotal = grand_total
 
-        # Discount
-        if discount_type == "%":
-            discount_amount = subtotal * discount_value / 100
-        else:
-            discount_amount = discount_value
-
-        # Surcharge
-        if express_service and surcharge_value > 0:
-            if surcharge_type == "%":
-                surcharge_amount = subtotal * surcharge_value / 100
+            # Discount
+            if discount_type == "%":
+                discount_amount = subtotal * discount_value / 100
             else:
-                surcharge_amount = surcharge_value
-        else:
-            surcharge_amount = 0.0
-            surcharge_type = "Rs"
-            surcharge_value = 0.0
-            express_service = 0
+                discount_amount = discount_value
 
-        final_total = max(0.0, subtotal - discount_amount + surcharge_amount)
+            # Surcharge
+            if express_service and surcharge_value > 0:
+                if surcharge_type == "%":
+                    surcharge_amount = subtotal * surcharge_value / 100
+                else:
+                    surcharge_amount = surcharge_value
+            else:
+                surcharge_amount = 0.0
+                surcharge_type = "Rs"
+                surcharge_value = 0.0
+                express_service = 0
 
-        # ---- Subscription wallet auto-deduction (server-side truth) ----
-        # Auto-apply wallet on normal bills when customer has balance.
-        # Do NOT apply wallet on subscription top-up bills (items that exist in subscription_products).
-        wallet_used = 0.0
-        wallet_balance_before = 0.0
+            computed = totals({
+                'discount_type': discount_type, 'discount_value': discount_value,
+                'express_service': express_service, 'surcharge_type': surcharge_type,
+                'surcharge_value': surcharge_value, 'advance_paid': advance_paid,
+            }, [{'total': line[2]} for line in validated_items])
+            subtotal = computed['subtotal']
+            surcharge_amount = computed['surcharge_amount']
+            final_total = computed['total_before_wallet']
 
-        # Is this a subscription top-up bill?
-        cur.execute("""
-            SELECT 1
-            FROM bill_items bi
-            JOIN subscription_products sp
-              ON sp.service_id = bi.service_id
-             AND sp.is_active = 1
-            WHERE bi.bill_id = ?
-            LIMIT 1
-        """, (bill_id,))
-        is_subscription_topup_bill = cur.fetchone() is not None
+            # ---- Subscription wallet auto-deduction (server-side truth) ----
+            # Auto-apply wallet on normal bills when customer has balance.
+            # Do NOT apply wallet on subscription top-up bills (items that exist in subscription_products).
+            wallet_used = 0.0
+            wallet_balance_before = 0.0
 
-        if not is_subscription_topup_bill:
-            # Fetch wallet balance (only customers who bought subscription will have a row)
-            cur.execute("SELECT current_balance FROM customer_subscriptions WHERE customer_id = ? AND is_active = 1", (customer_id,))
-            r = cur.fetchone()
-            wallet_balance_before = float(r[0]) if r else 0.0
+            # Is this a subscription top-up bill?
+            cur.execute("""
+                SELECT 1
+                FROM bill_items bi
+                JOIN subscription_products sp
+                  ON sp.service_id = bi.service_id
+                 AND sp.is_active = 1
+                WHERE bi.bill_id = ?
+                LIMIT 1
+            """, (bill_id,))
+            is_subscription_topup_bill = cur.fetchone() is not None
 
-            if wallet_balance_before > 0:
-                wallet_used = min(wallet_balance_before, final_total)
+            if not is_subscription_topup_bill:
+                # Fetch wallet balance (only customers who bought subscription will have a row)
+                cur.execute("SELECT current_balance FROM customer_subscriptions WHERE customer_id = ? AND is_active = 1", (customer_id,))
+                r = cur.fetchone()
+                wallet_balance_before = float(r[0]) if r else 0.0
 
-                if wallet_used > 0:
-                    # Prevent double debit for same bill
-                    cur.execute("""
-                        SELECT 1 FROM subscription_ledger
-                        WHERE bill_id = ? AND txn_type = 'DEBIT'
-                        LIMIT 1
-                    """, (bill_id,))
-                    if not cur.fetchone():
+                if wallet_balance_before > 0:
+                    wallet_used = float(min(money(wallet_balance_before), money(final_total)))
+
+                    if wallet_used > 0:
+                        # Prevent double debit for same bill
                         cur.execute("""
-                            INSERT INTO subscription_ledger (customer_id, bill_id, txn_type, amount, notes)
-                            VALUES (?, ?, 'DEBIT', ?, 'Auto wallet deduction on bill')
-                        """, (customer_id, bill_id, wallet_used))
+                            SELECT 1 FROM subscription_ledger
+                            WHERE bill_id = ? AND txn_type = 'DEBIT'
+                            LIMIT 1
+                        """, (bill_id,))
+                        if not cur.fetchone():
+                            cur.execute("""
+                                INSERT INTO subscription_ledger (customer_id, bill_id, txn_type, amount, notes)
+                                VALUES (?, ?, 'DEBIT', ?, 'Auto wallet deduction on bill')
+                            """, (customer_id, bill_id, wallet_used))
 
-                        cur.execute("""
-                            UPDATE customer_subscriptions
-                            SET current_balance = current_balance - ?,
-                                updated_at = CURRENT_TIMESTAMP
-                            WHERE customer_id = ?
-                        """, (wallet_used, customer_id))
+                            cur.execute("""
+                                UPDATE customer_subscriptions
+                                SET current_balance = ROUND(current_balance - ?, 2),
+                                    updated_at = CURRENT_TIMESTAMP
+                                WHERE customer_id = ?
+                            """, (wallet_used, customer_id))
 
-        # Payable after wallet
-        final_total = max(0.0, final_total - wallet_used)
+            # Payable after wallet
+            final_total = max(0.0, final_total - wallet_used)
 
-        balance_amount = max(0.0, final_total - advance_paid)
+            balance_amount = float(max(money(0), money(final_total) - money(advance_paid)))
 
-        cur.execute(
-            """UPDATE bills
-               SET total = ?,
-                   balance_amount = ?,
-                   express_service = ?,
-                   surcharge_type = ?,
-                   surcharge_value = ?,
-                   surcharge_amount = ?
-               WHERE id = ?""",
-            (subtotal, balance_amount, express_service, surcharge_type, surcharge_value, surcharge_amount, bill_id)
-        )
-        conn.commit()
-        conn.close()
+            cur.execute(
+                """UPDATE bills
+                   SET total = ?,
+                       balance_amount = ?,
+                       express_service = ?,
+                       surcharge_type = ?,
+                       surcharge_value = ?,
+                       surcharge_amount = ?
+                   WHERE id = ?""",
+                (subtotal, balance_amount, express_service, surcharge_type, surcharge_value, surcharge_amount, bill_id)
+            )
+            if is_paid:
+                apply_subscription_credit_for_bill(bill_id, conn, cur)
+            conn.commit()
 
-        return redirect(url_for("bill_view", bill_id=bill_id))
+            return redirect(url_for("bill_view", bill_id=bill_id))
+        except (ValueError, sqlite3.IntegrityError) as exc:
+            conn.rollback()
+            return f'Bill was not saved: {exc}', 400
+        finally:
+            conn.close()
 
     return render_template("index.html")
 
 @app.route("/api/generate-bill", methods=["POST"])
 def generate_bill():
-    # For now, just respond with a fake bill
-    return jsonify({
-        "success": True,
-        "bill_id": f"INV{datetime.now().strftime('%Y%m%d%H%M%S')}",
-        "bill_date": datetime.now().strftime("%Y-%m-%d")
-    })
+    return jsonify(success=False, message='Use the billing form to create a saved invoice'), 501
 
 
-@app.route("/bill/<int:bill_id>")
+def invoice_context(bill_id=None, token=None, make_qr=True):
+    conn = get_db_connection()
+    try:
+        key, value = ('b.id', bill_id) if bill_id is not None else ('b.token', token)
+        row = conn.execute(f"SELECT b.*, c.name AS customer_name, c.phone AS customer_phone FROM bills b JOIN customers c ON c.id=b.customer_id WHERE {key}=?", (value,)).fetchone()
+        if not row:
+            abort(404)
+        bill = dict(row)
+        items = conn.execute('SELECT * FROM bill_items WHERE bill_id=?', (bill['id'],)).fetchall()
+        status = conn.execute('SELECT payment_status FROM bill_status WHERE bill_id=?', (bill['id'],)).fetchone()
+        bill['is_paid'] = bool(status and status['payment_status'] == 'Paid')
+        bill['is_cancelled'] = bool(bill.get('void'))
+        for source, dest, fmt in [('date', 'formatted_date', '%Y-%m-%d %H:%M:%S'), ('delivery_date', 'formatted_due_date', '%Y-%m-%d')]:
+            try:
+                bill[dest] = datetime.strptime(bill[source], fmt).strftime('%d-%b-%Y')
+            except (ValueError, TypeError):
+                bill[dest] = bill[source]
+        debit = conn.execute("SELECT COALESCE(SUM(amount),0) FROM subscription_ledger WHERE bill_id=? AND txn_type='DEBIT'", (bill['id'],)).fetchone()[0]
+        amounts = totals(bill, items, debit, bill['is_paid'])
+        wallet = conn.execute('SELECT current_balance FROM customer_subscriptions WHERE customer_id=?', (bill['customer_id'],)).fetchone()
+        # QR payments are temporarily removed from bills. Keep the context field
+        # and function argument for compatibility with existing invoice callers.
+        qr_filename = None
+        return dict(bill=bill, items=items, qr_image=qr_filename, final_total=amounts['final_payable'], wallet_balance=float(wallet[0]) if wallet else 0, **amounts)
+    finally:
+        conn.close()
+
+
+@app.route('/bill/<int:bill_id>')
 @login_required
 def bill_view(bill_id):
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
+    return render_template('invoice.html', **invoice_context(bill_id=bill_id))
 
-    cur.execute("""
-        SELECT b.*, c.name AS customer_name, c.phone AS customer_phone
-        FROM bills b
-        JOIN customers c ON b.customer_id = c.id
-        WHERE b.id = ?
-    """, (bill_id,))
-    row = cur.fetchone()
-
-    cur.execute("SELECT * FROM bill_items WHERE bill_id = ?", (bill_id,))
-    items = cur.fetchall()
-    conn.close()
-
-    if row is None:
-        abort(404)
-
-    bill = dict(row)
-    bill_is_cancelled = bool(bill.get("void")) and int(bill.get("void")) == 1
-    bill["is_cancelled"] = bill_is_cancelled
-    # Format date
-    try:
-        dt = datetime.strptime(bill['date'], "%Y-%m-%d %H:%M:%S")
-        bill['formatted_date'] = dt.strftime("%d-%b-%Y")
-    except Exception:
-        bill['formatted_date'] = bill['date']
-  
-    try:
-        dt1 = datetime.strptime(bill['delivery_date'], "%Y-%m-%d")
-        bill['formatted_due_date'] = dt1.strftime("%d-%b-%Y")
-    except Exception:
-        bill['formatted_due_date'] = bill['delivery_date']
-
-    # ✅ Calculate subtotal from items
-    subtotal = sum(float(item['qty']) * float(item['rate']) for item in items)
-
-    # ✅ Calculate discount
-    discount_value = float(bill['discount_value']) if bill.get('discount_value') else 0.0
-    if bill.get('discount_type') == "%":
-        discount_amount = subtotal * discount_value / 100
-    else:
-        discount_amount = discount_value
-
-    # ✅ Surcharge (Express)
-    surcharge_amount = float(bill.get("surcharge_amount") or 0.0)
-    # Backward compatibility: if old bill has type/value but no stored amount
-    if surcharge_amount == 0 and bill.get("express_service") and float(bill.get("surcharge_value") or 0) > 0:
-        s_type = bill.get("surcharge_type") or "Rs"
-        s_val = float(bill.get("surcharge_value") or 0)
-        surcharge_amount = subtotal * s_val / 100 if s_type == "%" else s_val
-
-    # ✅ Final Bill = Subtotal - Discount + Surcharge
-    final_total = max(0.0, subtotal - discount_amount + surcharge_amount)
-        # ✅ Wallet Used (DEBIT) for this bill
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT amount
-        FROM subscription_ledger
-        WHERE bill_id = ?
-          AND txn_type = 'DEBIT'
-        LIMIT 1
-    """, (bill_id,))
-    row_wallet = cur.fetchone()
-    wallet_used = float(row_wallet["amount"]) if row_wallet else 0.0
-
-    # Cap wallet_used to final_total (safety)
-    wallet_used = min(wallet_used, final_total)
-
-    # ✅ Wallet Balance (current remaining balance for customer)
-    cur.execute("""
-        SELECT current_balance
-        FROM customer_subscriptions
-        WHERE customer_id = ?
-    """, (bill["customer_id"],))
-    row_bal = cur.fetchone()
-    wallet_balance = float(row_bal["current_balance"]) if row_bal else 0.0
-
-    conn.close()
-
-    # ✅ Payable after wallet
-    final_payable = max(0.0, final_total - wallet_used)
-
-
-    # ✅ Generate QR for final total
-    qr_filename = f"qr_{bill_id}.png"
-    qr_path = os.path.join("static/qr", qr_filename)
-    generate_upi_qr("freshthreads0549@iob", "Fresh Threads Laundry", final_payable, qr_path)
-        # ✅ Fetch payment status
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute("SELECT payment_status FROM bill_status WHERE bill_id = ?", (bill_id,))
-    status = cur.fetchone()
-    conn.close()
-
-    # ✅ Set paid flag for template
-    bill["is_paid"] = status and status["payment_status"] == "Paid"
-
-    return render_template(
-        "invoice.html",
-        bill=bill,
-        items=items,
-        qr_image=qr_filename,
-        subtotal=subtotal,
-        discount_amount=discount_amount,
-        surcharge_amount=surcharge_amount,
-        final_total=final_payable,          # Final Bill (payable after wallet)
-        wallet_used=wallet_used,
-        wallet_balance=wallet_balance,
-
-    )
 
 @app.route('/invoice/pdf/<int:bill_id>')
 @login_required
 def generate_pdf(bill_id):
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
+    context = invoice_context(bill_id=bill_id, make_qr=False)
+    return send_file(create_invoice_pdf(context), mimetype='application/pdf', as_attachment=True,
+                     download_name=f'invoice_{bill_id}.pdf')
 
-    cur.execute("""
-        SELECT b.*, c.name AS customer_name, c.phone AS customer_phone
-        FROM bills b
-        JOIN customers c ON b.customer_id = c.id
-        WHERE b.id = ?
-    """, (bill_id,))
-    bill = dict(cur.fetchone())
-
-    cur.execute("SELECT * FROM bill_items WHERE bill_id = ?", (bill_id,))
-    items = cur.fetchall()
-    conn.close()
-
-    rendered = render_template("invoice.html", bill=bill, items=items)
-    config = pdfkit.configuration(wkhtmltopdf=r'\bin\wkhtmltopdf.exe')
-    pdfkit.from_string(rendered, pdf_path, configuration=config)
-
-    pdf_path = f"static/invoices/invoice_{bill_id}.pdf"
-    pdfkit.from_string(rendered, pdf_path)  # Add config= if wkhtmltopdf is not in PATH
-
-    return send_from_directory('static/invoices', f"invoice_{bill_id}.pdf")
 
 @app.route("/reports", methods=["GET"])
 @login_required
@@ -858,7 +866,8 @@ def reports():
         
         for b in bills:
             b=dict(b)
-            total_amount += float(b["total"])
+            item_subtotal = conn.execute('SELECT COALESCE(SUM(total),0) FROM bill_items WHERE bill_id=?', (b['id'],)).fetchone()[0]
+            total_amount += totals(b, [{'total': item_subtotal}])['total_before_wallet']
             total_advance += float(b["advance_paid"] or 0)
             total_balance += float(b["balance_amount"] or 0)
 
@@ -877,6 +886,16 @@ def reports():
         total_advance=total_advance,
         total_balance=total_balance
     )
+
+def excel_response(df, filename):
+    # Customer-entered names/notes must remain text when opened in Excel.
+    for column in df.select_dtypes(include=['object']).columns:
+        df[column] = df[column].map(lambda value: "'" + value if isinstance(value, str) and value.startswith(('=', '+', '-', '@')) else value)
+    output = BytesIO()
+    df.to_excel(output, index=False)
+    output.seek(0)
+    return send_file(output, as_attachment=True, download_name=filename, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
 
 @app.route("/reports/export")
 def export_report():
@@ -898,12 +917,8 @@ def export_report():
     """, (start_date, end_date))
 
     rows = cur.fetchall()
-    df = pd.DataFrame(rows)
-
-    output_path = f"static/reports/report_{start_date}_to_{end_date}.xlsx"
-    df.to_excel(output_path, index=False)
-
-    return send_file(output_path, as_attachment=True)
+    df = pd.DataFrame([tuple(row) for row in rows], columns=[desc[0] for desc in cur.description])
+    return excel_response(df, f'report_{start_date}_to_{end_date}.xlsx')
 
 
 @app.route("/api/daily-report")
@@ -950,6 +965,7 @@ def export_daily():
         JOIN customers c ON b.customer_id = c.id
         JOIN bill_items bi ON b.id = bi.bill_id
         WHERE DATE(b.date) = ?
+          AND IFNULL(b.void,0)=0
         ORDER BY b.id
     """, (report_date,))
     rows = cur.fetchall()
@@ -959,11 +975,7 @@ def export_daily():
 
     import pandas as pd
     df = pd.DataFrame(rows, columns=columns)
-    path = f"static/reports/daily_{report_date}.xlsx"
-    df.to_excel(path, index=False)
-
-    from flask import send_file
-    return send_file(path, as_attachment=True)
+    return excel_response(df, f'daily_{report_date}.xlsx')
 
 @app.route("/api/delivery-report")
 def api_delivery_report():
@@ -987,79 +999,45 @@ def api_delivery_report():
 
 @app.route("/api/cancel-bill", methods=["POST"])
 def cancel_bill():
-    bill_id = request.json.get("bill_id")
+    bill_id = (request.get_json(silent=True) or {}).get('bill_id')
     if not bill_id:
-        return jsonify({"success": False, "message": "Bill ID is required"}), 400
-
+        return jsonify(success=False, message='Bill ID is required'), 400
     conn = get_db_connection()
-    cur = conn.cursor()
-
-    # Mark bill as void
-    cur.execute("UPDATE bills SET void = 1 WHERE id = ?", (bill_id,))
-
-    # If wallet was used on this bill, reverse it (idempotent)
-    cur.execute("""
-        SELECT customer_id, amount
-        FROM subscription_ledger
-        WHERE bill_id = ? AND txn_type = 'DEBIT'
-        ORDER BY id ASC
-        LIMIT 1
-    """, (bill_id,))
-    debit_row = cur.fetchone()
-
-    if debit_row:
-        customer_id = int(debit_row["customer_id"])
-        debit_amount = float(debit_row["amount"])
-
-        # Ensure we haven't already reversed
-        cur.execute("""
-            SELECT 1 FROM subscription_ledger
-            WHERE bill_id = ? AND txn_type = 'REVERSAL'
-            LIMIT 1
-        """, (bill_id,))
-        already_reversed = cur.fetchone() is not None
-
-        if not already_reversed and debit_amount > 0:
-            cur.execute("""
-                INSERT INTO subscription_ledger (customer_id, bill_id, txn_type, amount, notes)
-                VALUES (?, ?, 'REVERSAL', ?, 'Wallet reversal on bill cancellation')
-            """, (customer_id, bill_id, debit_amount))
-
-            cur.execute("""
-                UPDATE customer_subscriptions
-                SET current_balance = current_balance + ?,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE customer_id = ?
-            """, (debit_amount, customer_id))
-
-    conn.commit()
-    conn.close()
-    return jsonify({"success": True, "message": f"Bill #{bill_id} cancelled"})
+    try:
+        conn.execute('BEGIN IMMEDIATE')
+        bill = conn.execute('SELECT customer_id, void FROM bills WHERE id=?', (bill_id,)).fetchone()
+        if not bill:
+            return jsonify(success=False, message='Bill not found'), 404
+        if bill['void']:
+            return jsonify(success=True, message=f'Bill #{bill_id} was already cancelled')
+        customer_id = bill['customer_id']
+        credit = money(conn.execute("SELECT COALESCE(SUM(amount),0) FROM subscription_ledger WHERE bill_id=? AND txn_type='CREDIT'", (bill_id,)).fetchone()[0])
+        debit = money(conn.execute("SELECT COALESCE(SUM(amount),0) FROM subscription_ledger WHERE bill_id=? AND txn_type='DEBIT'", (bill_id,)).fetchone()[0])
+        wallet = conn.execute('SELECT current_balance FROM customer_subscriptions WHERE customer_id=?', (customer_id,)).fetchone()
+        balance = money(wallet[0]) if wallet else money(0)
+        if credit and (not wallet or balance + debit < credit):
+            return jsonify(success=False, message='Cannot cancel: subscription credit has been spent. Settle the wallet first.'), 409
+        if debit:
+            conn.execute("INSERT INTO subscription_ledger(customer_id,bill_id,txn_type,amount,notes) VALUES (?,?,'REVERSAL',?,'Wallet reversal on bill cancellation')", (customer_id,bill_id,float(debit)))
+        if credit:
+            # ADJUST is supported by the existing schema; notes specify the debit direction.
+            conn.execute("INSERT INTO subscription_ledger(customer_id,bill_id,txn_type,amount,notes) VALUES (?,?,'ADJUST',?,'Subscription credit removed on bill cancellation')", (customer_id,bill_id,float(credit)))
+        if debit or credit:
+            conn.execute('UPDATE customer_subscriptions SET current_balance=?,updated_at=CURRENT_TIMESTAMP WHERE customer_id=?', (float(balance + debit - credit),customer_id))
+        conn.execute('UPDATE bills SET void=1 WHERE id=?', (bill_id,))
+        conn.commit()
+        return jsonify(success=True, message=f'Bill #{bill_id} cancelled')
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 @app.route("/bill/<int:bill_id>/embed")
 @login_required
 def bill_embed(bill_id):
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT b.*, c.name AS customer_name, c.phone AS customer_phone
-        FROM bills b
-        JOIN customers c ON b.customer_id = c.id
-        WHERE b.id = ?
-    """, (bill_id,))
-    bill = cur.fetchone()
-
-    cur.execute("SELECT * FROM bill_items WHERE bill_id = ?", (bill_id,))
-    items = cur.fetchall()
-    conn.close()
-
-    if not bill:
-        return "Bill not found", 404
-
-    return render_template("invoice_embed.html", bill=bill, items=items)
+    return render_template('invoice_embed.html', **invoice_context(bill_id=bill_id))
 
 @app.route("/api/outstanding-report")
 def outstanding_report():
@@ -1068,7 +1046,7 @@ def outstanding_report():
     cur.execute("""
         SELECT b.id AS bill_id, b.delivery_date,
                c.name AS customer_name, c.phone AS customer_phone,
-               sum(bi.items) as items, b.balance_amount,
+               sum(bi.items) as items, CASE WHEN s.payment_status='Paid' THEN 0 ELSE b.balance_amount END AS balance_amount,
                s.payment_status, s.delivery_status
         FROM bills b
         JOIN customers c ON b.customer_id = c.id
@@ -1084,14 +1062,20 @@ def outstanding_report():
 
 @app.route("/api/mark-paid", methods=["POST"])
 def mark_paid():
-    bill_id = request.json.get("bill_id")
+    bill_id = (request.get_json(silent=True) or {}).get("bill_id")
     if not bill_id:
         return jsonify({"success": False, "message": "bill_id is required"}), 400
 
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute("UPDATE bill_status SET payment_status = 'Paid' WHERE bill_id = ?", (bill_id,))
+        cur.execute('BEGIN IMMEDIATE')
+        row = cur.execute('SELECT void FROM bills WHERE id=?', (bill_id,)).fetchone()
+        if not row:
+            return jsonify(success=False, message='Bill not found'), 404
+        if row['void']:
+            return jsonify(success=False, message='Cancelled bills cannot be marked paid'), 409
+        cur.execute("INSERT INTO bill_status(bill_id,payment_status) VALUES (?,'Paid') ON CONFLICT(bill_id) DO UPDATE SET payment_status='Paid',updated_at=CURRENT_TIMESTAMP", (bill_id,))
         # Unlock subscription credit if this is a subscription top-up bill
         credited = apply_subscription_credit_for_bill(bill_id, conn, cur)
         conn.commit()
@@ -1108,12 +1092,15 @@ def mark_paid():
 
 @app.route("/api/mark-delivered", methods=["POST"])
 def mark_delivered():
-    bill_id = request.json.get("bill_id")
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("UPDATE bill_status SET delivery_status = 'Delivered' WHERE bill_id = ?", (bill_id,))
-    conn.commit()
-    return jsonify({"success": True, "message": f"Bill #{bill_id} marked as Delivered"})
+    bill_id = (request.get_json(silent=True) or {}).get('bill_id')
+    with get_db_connection() as conn:
+        row = conn.execute('SELECT void FROM bills WHERE id=?', (bill_id,)).fetchone()
+        if not row:
+            return jsonify(success=False, message='Bill not found'), 404
+        if row['void']:
+            return jsonify(success=False, message='Cancelled bills cannot be marked delivered'), 409
+        conn.execute("INSERT INTO bill_status(bill_id,delivery_status) VALUES (?,'Delivered') ON CONFLICT(bill_id) DO UPDATE SET delivery_status='Delivered',updated_at=CURRENT_TIMESTAMP", (bill_id,))
+    return jsonify(success=True, message=f'Bill #{bill_id} marked as Delivered')
 
 @app.route("/outstanding_summary")
 @login_required
@@ -1168,107 +1155,72 @@ def outstanding_summary():
         "pending_amount": f"{pending_amount:.2f}"
     })
 
+def sales_records(start, end):
+    conn = get_db_connection()
+    rows = conn.execute("""
+        SELECT b.*, c.name AS customer_name, c.phone AS customer_phone,
+               (SELECT COALESCE(SUM(bi.total),0) FROM bill_items bi WHERE bi.bill_id=b.id) AS item_subtotal
+        FROM bills b JOIN customers c ON c.id=b.customer_id
+        WHERE DATE(b.date) BETWEEN ? AND ? AND IFNULL(b.void,0)=0
+        ORDER BY b.date, b.id
+    """, (start,end)).fetchall()
+    result = []
+    for row in rows:
+        bill = dict(row)
+        bill['sale_total'] = totals(bill, [{'total': bill.pop('item_subtotal')}])['total_before_wallet']
+        result.append(bill)
+    return result
+
+
 @app.route("/api/summary-daily")
 def api_summary_daily():
-    report_date = request.args.get("date")
+    report_date = request.args.get('date')
     if not report_date:
-        return jsonify({"error": "Date is required"}), 400
+        return jsonify(error='Date is required'), 400
+    rows = sales_records(report_date, report_date)
+    return jsonify(total_bills=len(rows), total_sales=f"{sum(money(b['sale_total']) for b in rows):.2f}")
 
-    conn = get_db_connection()
-    cur = conn.cursor()
 
-    cur.execute("""
-        SELECT COUNT(*) AS total_bills, SUM(balance_amount) AS total_sales
-        FROM bills
-        WHERE DATE(date) = ? AND IFNULL(void, 0) = 0
-    """, (report_date,))
-    row = cur.fetchone()
-    conn.close()
-
-    return jsonify({
-        "total_bills": row["total_bills"] or 0,
-        "total_sales": f"{(row['total_sales'] or 0):.2f}"
-    })
-
-@app.route("/api/summary-range")
+@app.route('/api/summary-range')
 def api_summary_range():
-    start = request.args.get("start")
-    end = request.args.get("end")
-
+    start, end = request.args.get('start'), request.args.get('end')
     if not start or not end:
-        return jsonify({"error": "Start and End date required"}), 400
+        return jsonify(error='Start and End date required'), 400
+    rows = sales_records(start,end)
+    return jsonify(total_bills=len(rows), total_sales=f"{sum(money(b['sale_total']) for b in rows):.2f}")
 
-    conn = get_db_connection()
-    cur = conn.cursor()
 
-    cur.execute("""
-        SELECT COUNT(*) AS total_bills, SUM(balance_amount) AS total_sales
-        FROM bills
-        WHERE DATE(date) BETWEEN ? AND ? AND IFNULL(void, 0) = 0
-    """, (start, end))
-    row = cur.fetchone()
-    conn.close()
-
-    return jsonify({
-        "total_bills": row["total_bills"] or 0,
-        "total_sales": f"{(row['total_sales'] or 0):.2f}"
-    })
-
-@app.route("/api/range-report")
+@app.route('/api/range-report')
 def api_range_report():
-    start = request.args.get("start")
-    end = request.args.get("end")
+    start, end = request.args.get('start'), request.args.get('end')
     if not start or not end:
         return jsonify([])
+    return jsonify([dict(bill_id=b['id'], date=b['date'], customer_name=b['customer_name'], customer_phone=b['customer_phone'], total=b['sale_total']) for b in sales_records(start,end)])
 
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT b.id AS bill_id, b.date, c.name AS customer_name, c.phone AS customer_phone,b.balance_amount as total
-        FROM bills b
-        JOIN customers c ON b.customer_id = c.id
-        WHERE DATE(b.date) BETWEEN ? AND ?
-          AND IFNULL(b.void, 0) = 0
-        ORDER BY b.date ASC, b.id ASC
-    """, (start, end))
-
-    rows = cur.fetchall()
-    return jsonify([dict(row) for row in rows])
 @app.route("/api/verify-password", methods=["POST"])
 def verify_password():
     data = request.get_json()
-    if not data or data.get("password") != ADMIN_PASSWORD:
+    if not data or not check_password_hash(app.config.get("ADMIN_PASSWORD_HASH", ""), data.get("password") or ""):
         return jsonify({"success": False, "message": "Invalid password"}), 403
+    session["admin_verified_until"] = time.time() + 300
     return jsonify({"success": True})
 
 @app.route("/api/range-summary-by-date")
 def api_range_summary_by_date():
-    start = request.args.get("start")
-    end = request.args.get("end")
+    start, end = request.args.get('start'), request.args.get('end')
     if not start or not end:
         return jsonify([])
-
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
-        SELECT 
-            DATE(date) AS report_date,
-            COUNT(*) AS bill_count,
-            SUM(balance_amount) AS total_sales,
-            SUM(CASE WHEN order_type = 'Walk-in' THEN 1 ELSE 0 END) AS walkin_count,
-            SUM(CASE WHEN order_type = 'Online' THEN 1 ELSE 0 END) AS online_count,
-            SUM(CASE WHEN order_type = 'Walk-in' THEN balance_amount ELSE 0 END) AS walkin_sales,
-            SUM(CASE WHEN order_type = 'Online' THEN balance_amount ELSE 0 END) AS online_sales
-        FROM bills
-        WHERE DATE(date) BETWEEN ? AND ? AND IFNULL(void, 0) = 0
-        GROUP BY DATE(date)
-        ORDER BY DATE(date)
-    """, (start, end))
-    rows = cur.fetchall()
-    conn.close()
-    return jsonify([dict(row) for row in rows])
+    grouped = {}
+    for bill in sales_records(start,end):
+        day = bill['date'][:10]
+        row = grouped.setdefault(day, dict(report_date=day, bill_count=0, total_sales=0, walkin_count=0, online_count=0, walkin_sales=0, online_sales=0))
+        row['bill_count'] += 1
+        row['total_sales'] = float(money(row['total_sales']) + money(bill['sale_total']))
+        category = {'Walk-in':'walkin','Online':'online'}.get(bill['order_type'])
+        if category:
+            row[category+'_count'] += 1
+            row[category+'_sales'] = float(money(row[category+'_sales']) + money(bill['sale_total']))
+    return jsonify(list(grouped.values()))
 
 # === Expense Types ===
 
@@ -1302,14 +1254,21 @@ def add_expense_type():
 # === Expenses ===
 @app.route("/api/expenses", methods=["POST"])
 def create_expense():
-    data = request.get_json() or request.form
+    data = request.get_json(silent=True) or request.form
+    try:
+        amount = float(money(data.get('amount')))
+        if amount <= 0 or not data.get('expense_type_id'):
+            raise ValueError('A positive amount and expense type are required')
+        datetime.strptime(data.get('date', ''), '%Y-%m-%d')
+    except (ValueError, TypeError) as exc:
+        return jsonify(success=False, error=str(exc)), 400
     db = get_db_connection()
     cur = db.execute("""
         INSERT INTO expenses (expense_type_id, amount, date, notes)
         VALUES (?, ?, ?, ?)
     """, (
         data["expense_type_id"],
-        data["amount"],
+        amount,
         data["date"],
         data.get("notes", "")
     ))
@@ -1351,28 +1310,42 @@ def edit_bill(bill_id):
     cur = conn.cursor()
 
     if request.method == "POST":
+        cur.execute("BEGIN IMMEDIATE")
         discount_type = request.form.get("discountType")
-        discount_value = float(request.form.get("discountValue") or 0)
+        try:
+            discount_value = float(number(request.form.get('discountValue'), 'Discount'))
+        except ValueError as exc:
+            conn.close()
+            return str(exc), 400
 
         # Fetch current total and advance_paid
-        cur.execute("SELECT total, advance_paid FROM bills WHERE id = ?", (bill_id,))
+        cur.execute("SELECT * FROM bills WHERE id = ?", (bill_id,))
         row = cur.fetchone()
 
         if not row:
             conn.close()
             return "Bill not found", 404
 
-        total = float(row["total"])
-        advance_paid = float(row["advance_paid"] or 0)
-
-        # Calculate discount and new balance
-        if discount_type == "%":
-            discount_amount = total * discount_value / 100
-        else:
-            discount_amount = discount_value
-
-        final_total = max(0, total - discount_amount)
-        balance_amount = max(0, final_total - advance_paid)
+        state = cur.execute('SELECT payment_status FROM bill_status WHERE bill_id=?', (bill_id,)).fetchone()
+        if row['void'] or (state and state['payment_status'] == 'Paid'):
+            conn.close()
+            return 'Paid or cancelled bills cannot be edited', 409
+        try:
+            if discount_type not in ('Rs', 'Amount', '%'):
+                raise ValueError('Invalid discount type')
+            number(discount_value, 'Discount')
+            if discount_type == '%' and discount_value > 100:
+                raise ValueError('Percentage must not exceed 100')
+            updated = dict(row, discount_type=discount_type, discount_value=discount_value)
+            items = cur.execute('SELECT * FROM bill_items WHERE bill_id=?', (bill_id,)).fetchall()
+            wallet = cur.execute("SELECT COALESCE(SUM(amount),0) FROM subscription_ledger WHERE bill_id=? AND txn_type='DEBIT'", (bill_id,)).fetchone()[0]
+            computed = totals(updated, items, wallet)
+            if computed['total_before_wallet'] < float(wallet):
+                raise ValueError('Discount would reduce the bill below wallet money already used; cancel and recreate the bill')
+            balance_amount = computed['balance_amount']
+        except ValueError as exc:
+            conn.close()
+            return str(exc), 400
 
         # Update bill
         cur.execute("""
@@ -1388,13 +1361,16 @@ def edit_bill(bill_id):
     # Load current bill for display
     bill = cur.execute("SELECT * FROM bills WHERE id = ?", (bill_id,)).fetchone()
     conn.close()
+    if not bill:
+        abort(404)
     return render_template("edit_bill.html", bill=bill)
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        if USERS.get(username) == password:
+        if username == app.config.get('LOGIN_USERNAME') and check_password_hash(app.config.get('LOGIN_PASSWORD_HASH', ''), password or ''):
+            session.clear()
             session['user'] = username
             return redirect(url_for('home'))  # or billing dashboard
         else:
@@ -1402,145 +1378,17 @@ def login():
     return render_template('login.html')
 @app.route("/pay/<token>")
 def customer_view(token):
-    conn = get_db_connection()
-    cur = conn.cursor()
+    return render_template('customer_invoice.html', **invoice_context(token=token))
 
-    bill = cur.execute("""
-        SELECT b.*, c.name AS customer_name, c.phone AS customer_phone
-        FROM bills b
-        JOIN customers c ON b.customer_id = c.id
-        WHERE b.token = ?
-    """, (token,)).fetchone()
 
-    if not bill:
-        return "Invalid or expired link", 404
-
-    items = cur.execute("SELECT * FROM bill_items WHERE bill_id = ?", (bill["id"],)).fetchall()
-    status = cur.execute("SELECT payment_status FROM bill_status WHERE bill_id = ?", (bill["id"],)).fetchone()
-    conn.close()
-
-    bill = dict(bill)
-    bill["is_paid"] = status and status["payment_status"] == "Paid"
-
-    # Format dates
-    try:
-        bill['formatted_date'] = datetime.strptime(bill['date'], "%Y-%m-%d %H:%M:%S").strftime("%d-%b-%Y")
-    except:
-        bill['formatted_date'] = bill['date']
-    try:
-        bill['formatted_due_date'] = datetime.strptime(bill['delivery_date'], "%Y-%m-%d").strftime("%d-%b-%Y")
-    except:
-        bill['formatted_due_date'] = bill['delivery_date']
-
-    # Totals
-    subtotal = sum(float(i['qty']) * float(i['rate']) for i in items)
-    discount = float(bill['discount_value'] or 0)
-    discount_amount = subtotal * discount / 100 if bill['discount_type'] == "%" else discount
-    surcharge_amount = float(bill.get("surcharge_amount") or 0.0)
-    if surcharge_amount == 0 and bill.get("express_service") and float(bill.get("surcharge_value") or 0) > 0:
-        s_type = bill.get("surcharge_type") or "Rs"
-        s_val = float(bill.get("surcharge_value") or 0)
-        surcharge_amount = subtotal * s_val / 100 if s_type == "%" else s_val
-
-    final_total = max(0.0, subtotal - discount_amount + surcharge_amount)
-
-    # Generate QR
-    qr_filename = f"qr_{bill['id']}.png"
-    qr_path = os.path.join("static/qr", qr_filename)
-    generate_upi_qr("freshthreads0549@iob", "Fresh Threads Laundry", final_total, qr_path)
-
-    return render_template(
-        "customer_invoice.html",
-        bill=bill,
-        items=items,
-        qr_image=qr_filename,
-        subtotal=subtotal,
-        discount_amount=discount_amount,
-        surcharge_amount=surcharge_amount,
-        final_total=final_total,
-    )
-
-@app.route("/api/bill-info/<token>")
+@app.route('/api/bill-info/<token>')
 def api_bill_info(token):
-    # if not require_internal_secret():
-    #     return jsonify({"error": "Forbidden"}), 403
-
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    bill = cur.execute("""
-        SELECT b.*, c.name AS customer_name, c.phone AS customer_phone
-        FROM bills b
-        JOIN customers c ON b.customer_id = c.id
-        WHERE b.token = ?
-    """, (token,)).fetchone()
-
-    if not bill:
-        conn.close()
-        return jsonify({"error": "Invalid token"}), 404
-
-    items = cur.execute("""
-        SELECT bi.*,
-               s.name AS service_name
-        FROM bill_items bi
-        LEFT JOIN services s ON s.id = bi.service_id
-        WHERE bi.bill_id = ?
-    """, (bill["id"],)).fetchall()
-
-    status = cur.execute(
-        "SELECT payment_status FROM bill_status WHERE bill_id = ?",
-        (bill["id"],)
-    ).fetchone()
-
-    # --- Compute totals (same logic as invoice/pay page) ---
-    subtotal = 0.0
-    for it in items:
-        qty = float(it["qty"] or 0)
-        rate = float(it["rate"] or 0)
-        subtotal += qty * rate
-
-    discount_value = float(bill["discount_value"] or 0)
-    discount_type = (bill["discount_type"] or "Rs")
-    discount_amount = (subtotal * discount_value / 100.0) if discount_type == "%" else discount_value
-
-    surcharge_amount = float(bill["surcharge_amount"] or 0.0)
-    if surcharge_amount == 0 and int(bill["express_service"] or 0) == 1 and float(bill["surcharge_value"] or 0) > 0:
-        s_type = bill["surcharge_type"] or "Rs"
-        s_val = float(bill["surcharge_value"] or 0)
-        surcharge_amount = (subtotal * s_val / 100.0) if s_type == "%" else s_val
-
-    total_before_wallet = max(0.0, subtotal - discount_amount + surcharge_amount)
-
-    # --- Wallet used on this bill (ledger DEBIT) ---
-    row_wallet = cur.execute("""
-        SELECT amount
-        FROM subscription_ledger
-        WHERE bill_id = ? AND txn_type = 'DEBIT'
-        LIMIT 1
-    """, (bill["id"],)).fetchone()
-    wallet_used = float(row_wallet["amount"]) if row_wallet else 0.0
-    wallet_used = min(wallet_used, total_before_wallet)
-
-    # --- Current wallet balance for customer ---
-    row_bal = cur.execute("""
-        SELECT current_balance
-        FROM customer_subscriptions
-        WHERE customer_id = ?
-    """, (bill["customer_id"],)).fetchone()
-    wallet_balance = float(row_bal["current_balance"]) if row_bal else 0.0
-
-    final_payable = max(0.0, total_before_wallet - wallet_used)
-
-    conn.close()
-
+    context = invoice_context(token=token, make_qr=False)
     return jsonify({
-        "bill": dict(bill),
-        "items": [dict(i) for i in items],
-        "payment_status": status["payment_status"] if status else "Pending",
-        "wallet_used": wallet_used,
-        "wallet_balance": wallet_balance,
-        "final_payable": final_payable,
-        "total_before_wallet": total_before_wallet
+        'bill': context['bill'], 'items': [dict(i) for i in context['items']],
+        'payment_status': 'Paid' if context['bill']['is_paid'] else 'Pending',
+        **{key: context[key] for key in ('wallet_used', 'wallet_balance', 'final_payable', 'total_before_wallet', 'advance_paid', 'balance_amount', 'amount_due')},
+        'is_cancelled': context['bill']['is_cancelled'],
     })
 
 @app.route("/api/expense-types/<int:type_id>", methods=["PUT"])
@@ -1563,7 +1411,14 @@ def delete_expense_type(type_id):
 
 @app.route("/api/expenses/<int:expense_id>", methods=["PUT"])
 def update_expense(expense_id):
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
+    try:
+        amount = float(money(data.get('amount')))
+        if amount <= 0 or not data.get('expense_type_id'):
+            raise ValueError('A positive amount and expense type are required')
+        datetime.strptime(data.get('date', ''), '%Y-%m-%d')
+    except (ValueError, TypeError) as exc:
+        return jsonify(success=False, error=str(exc)), 400
     db = get_db_connection()
     db.execute("""
         UPDATE expenses
@@ -1571,7 +1426,7 @@ def update_expense(expense_id):
         WHERE id = ?
     """, (
         data["expense_type_id"],
-        data["amount"],
+        amount,
         data["date"],
         data.get("notes", ""),
         expense_id
@@ -1645,7 +1500,7 @@ def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5001, debug=False)
 
 
 

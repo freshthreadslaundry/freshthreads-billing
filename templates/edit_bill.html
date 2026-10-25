@@ -3,7 +3,7 @@
     <label>Discount Type:</label>
     <select name="discountType">
         <option value="%" {% if bill.discount_type == "%" %}selected{% endif %}>%</option>
-        <option value="Amount" {% if bill.discount_type == "Amount" %}selected{% endif %}>Amount</option>
+        <option value="Amount" {% if bill.discount_type in ("Amount", "Rs") %}selected{% endif %}>Amount</option>
     </select>
     <br><br>
     <label>Discount Value:</label>

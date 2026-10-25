@@ -256,7 +256,7 @@
             let hasTopup = false;
             $("#serviceTable tbody tr").each(function () {
                 const s = ($(this).find("input[name='service[]']").val() || "").toLowerCase();
-                if (s.includes("subscription wallet")) {
+                if (serviceMap[s]?.is_subscription_topup) {
                     hasTopup = true;
                     return false; // break
                 }
@@ -460,8 +460,10 @@
                         localMap = {};
                         aw.list = data.map(s => {
                             localMap[s.name] = s;
+                            serviceMap[s.name.toLowerCase()] = s;
                             return s.name;
                         });
+                        updateTotals();
                     });
                 });
                 input[0].addEventListener("awesomplete-selectcomplete", function (e) {
@@ -488,6 +490,10 @@
         });
 
 
+        function roundMoney(value) {
+            return Math.round((value + Number.EPSILON) * 100) / 100;
+        }
+
         function updateTotals() {
             let total = 0;
             let qtyInputs = document.querySelectorAll("input[name='qty[]']");
@@ -497,7 +503,7 @@
             for (let i = 0; i < qtyInputs.length; i++) {
                 let qty = parseFloat(qtyInputs[i].value) || 0;
                 let rate = parseFloat(rateInputs[i].value) || 0;
-                let lineTotal = qty * rate;
+                let lineTotal = roundMoney(qty * rate);
                 totalInputs[i].value = lineTotal.toFixed(2);
                 total += lineTotal;
             }
@@ -507,7 +513,7 @@
             // Discount
             let discountVal = parseFloat(document.querySelector("input[name='discountValue']").value) || 0;
             let discountType = document.querySelector("select[name='discountType']").value;
-            let discountAmount = (discountType === '%') ? total * (discountVal / 100) : discountVal;
+            let discountAmount = roundMoney((discountType === '%') ? total * (discountVal / 100) : discountVal);
 
             // Surcharge (Express Service)
 // Surcharge (Express Service)
@@ -528,10 +534,10 @@ let surchargeType =
 let surchargeAmount = 0;
 if (isExpress && surchargeVal > 0) {
     surchargeAmount =
-        (surchargeType === '%') ? total * (surchargeVal / 100) : surchargeVal;
+        roundMoney((surchargeType === '%') ? total * (surchargeVal / 100) : surchargeVal);
 }
 
-            let grandTotal = Math.max(0, total - discountAmount + surchargeAmount);
+            let grandTotal = roundMoney(Math.max(0, total - discountAmount + surchargeAmount));
                         // Auto-apply subscription wallet (no checkbox)
             const eligibleForWallet = !billHasSubscriptionTopup();
             const walletUsedAmt = eligibleForWallet ? Math.min(currentWalletBalance, grandTotal) : 0;

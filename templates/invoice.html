@@ -178,7 +178,10 @@
                     <td style="text-align: right; white-space: nowrap;"><strong>₹{{ "%.2f"|format(final_total) }}</strong></td>
                 </tr>
                 
-            </tfoot>
+
+        <tr><td colspan="3" style="text-align:right">Advance Paid</td><td style="text-align:right">₹{{ "%.2f"|format(advance_paid) }}</td></tr>
+        <tr><td colspan="3" style="text-align:right"><strong>Amount Due</strong></td><td style="text-align:right"><strong>₹{{ "%.2f"|format(amount_due) }}</strong></td></tr>
+        </tfoot>
         </table>
         
         {# 🚫 Cancelled Bill Handling #}
@@ -196,10 +199,6 @@
         {% if bill.is_paid %}
         <div style="text-align: center; margin-top: 30px;">
             <span class="badge bg-success" style="font-size: 16px; padding: 10px 20px;">✅ PAID</span>
-        </div>
-        {% elif qr_image and not bill.is_cancelled %}
-        <div style="text-align: center; margin-top: 30px;">
-            <!-- Show QR code only if not cancelled -->
         </div>
         {% endif %}
         <div class="text-center mt-4">
@@ -246,7 +245,7 @@
     document.getElementById("whatsappOnly").addEventListener("click", async function (e) {
         e.preventDefault();
         
-        const customerName = "{{ bill.customer_name }}";
+        const customerName = {{ bill.customer_name|tojson }};
         const billId = "{{ bill.id }}";
         const billDateRaw = "{{ bill.formatted_date }}";
         const safeDate = billDateRaw.replace(/[^a-zA-Z0-9]/g, "-");
@@ -254,7 +253,7 @@
         
         const rawPhone = "{{ bill.customer_phone|replace('+', '') }}";
         const phoneWithCountry = `91${rawPhone}`;
-        const upiLink = "upi://pay?pa=freshthreads0549@iob&pn=Fresh%20Threads%20Laundry%and%Dry%Cleaning%Services&am={{ '%.2f'|format(final_total) }}&cu=INR";
+        const upiLink = "upi://pay?pa=freshthreads0549@iob&pn=Fresh%20Threads%20Laundry&am={{ '%.2f'|format(amount_due) }}&cu=INR";
         
         //const upiLink = "upi://pay?pa=ramya.kappeta@axisbank&pn=Ramya Sree Kappeta";
         const token = "{{ bill.token }}";  // ensure token is passed in context
