@@ -83,3 +83,26 @@ python -m unittest discover -s tests -v
 ```
 
 Tests use temporary SQLite databases with synthetic records. They never use the business database. See [FIXES.md](FIXES.md) for each before/after change and validation details.
+
+## Outstanding and arrears
+
+Outstanding defaults to bills with delivery dates after 31 May 2026 (1 June onwards). View Arrears loads earlier outstanding bills, including 31 May, in the same bill table layout as Outstanding. Each view has its own totals. Missing or invalid delivery dates appear in a separate on-demand view when present.
+
+Payment and delivery remain separate: an unpaid or undelivered bill stays outstanding; paid bills show zero amount due. Cancelled and fully settled/delivered bills remain excluded. This reporting change does not modify existing bills, dates, balances, or wallet records.
+
+## Manager growth dashboard
+
+Before: operational totals in Store pulse. Now: aggregate business growth charts compare the latest 15 calendar days (including today so far, Hyderabad date) with the preceding 15 days. They are available on a dedicated staff-only Insights page, linked from Home, and are not loaded or calculated by Reports. Refresh insights reloads the snapshot. The overview never renders customer names, phone numbers or bill identifiers.
+
+- A 30-day daily sales graph separates saved Online and Walk-in order types; other/missing channels remain explicit. Zero-sales dates are included. Daily figures can be expanded.
+- New versus repeat compares unique customers and their sales share per period. New means the first recorded non-cancelled bill is in that period; repeat means an earlier bill exists. Multiple orders do not count a customer twice. Available history determines classification.
+- Channel volume, full sales value and average bill compare both periods. Sales are after discounts/express charges and before wallets/advances, not cash receipts.
+- Service mix allocates bill value proportionally across line values, reconciling to the bill to the paise. Service IDs/canonical names group quantity variants. Top five services plus the remaining services combined are shown.
+- Weekday demand uses average bills per actual weekday occurrence in each 15-day period, including zero-order dates.
+- Early retention measures a second non-cancelled bill within 15 days of the first. It compares two older 15-day acquisition cohorts with complete follow-up: days -29 through -15 versus -44 through -30, relative to today. Recent cohorts are excluded; an empty cohort has no rate.
+
+Cancelled bills and future-dated bills are excluded. Invalid/missing bill dates are counted in a warning. Undefined percentage growth (zero previous sales) is labelled as no baseline. Existing billing records, outstanding date scopes, credentials and report controls are unchanged.
+
+Historical invalid amounts do not block Reports. Only the displayed 30-day bills need sales calculations; older dated bills still establish customer history. Invalid amounts inside that window are excluded from monetary aggregates with an explicit incomplete-sales warning. Bill counts and customer classifications remain intact; channel average bill values divide by the count of valid-valued bills. Stored records are never corrected by the analytics.
+
+Insights navigation/mobile update: Home now has an Insights button to /insights. Refresh stays on /insights, with Home navigation back. On phones the page uses stacked panels, 44px minimum navigation targets, safe-area padding, compact channel comparison cards, and horizontally scrollable charts/tables. Layout checked at 360px and 390px in browser preview frames using synthetic data. No app package or AWS deployment was performed; a hosted WebView app needs the website deployment to receive these changes.

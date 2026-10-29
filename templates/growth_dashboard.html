@@ -1,0 +1,92 @@
+{% macro rupees(value) %}₹{{ '{:,.2f}'.format(value) }}{% endmacro %}
+{% set current = growth.current %}{% set previous = growth.previous %}
+<style>
+.growth-dashboard {--online:#2563eb;--walkin:#0d9488;color:#172b4d}
+.growth-dashboard .growth-panel{border:1px solid #dfe7ef;border-radius:14px;padding:20px;background:white;height:100%}
+.growth-dashboard .eyebrow{font-size:.75rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#607086}
+.growth-dashboard .muted{color:#607086;font-size:.85rem}.growth-dashboard h3{font-size:1.1rem;font-weight:700}
+.growth-dashboard .metric{font-size:1.7rem;font-weight:750;letter-spacing:-.03em}
+.growth-dashboard .key{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
+.growth-dashboard .bar{height:9px;border-radius:6px;min-width:0}.growth-dashboard .track{background:#eef2f6;border-radius:6px;overflow:hidden}
+.growth-dashboard table{font-size:.85rem}.growth-dashboard .table-wrap{overflow:auto}
+.growth-dashboard svg{width:100%;height:auto;display:block}.growth-dashboard svg text{font-size:12px;fill:#607086}
+.growth-dashboard .chart-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;max-width:100%}
+.growth-dashboard .chart-scroll:focus-visible{outline:2px solid #2563eb;outline-offset:3px}
+.growth-dashboard .channel-cards,.growth-dashboard .chart-hint{display:none}
+.growth-dashboard .growth-panel{min-width:0;overflow-wrap:anywhere}
+.growth-dashboard details summary{padding:12px 0;min-height:44px;cursor:pointer}
+.growth-dashboard .table-wrap{max-width:100%;-webkit-overflow-scrolling:touch}
+.growth-dashboard .table-wrap table{min-width:420px}
+@media(max-width:575.98px){
+ .growth-dashboard .growth-panel{padding:16px;border-radius:12px}
+ .growth-dashboard .sales-chart{min-width:650px}
+ .growth-dashboard .weekday-chart{min-width:480px}
+ .growth-dashboard .chart-hint{display:block;margin:8px 0 12px}
+ .growth-dashboard .channel-table{display:none}
+ .growth-dashboard .channel-cards{display:block}
+ .growth-dashboard .channel-periods{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+ .growth-dashboard .metric{font-size:1.5rem}
+ .growth-dashboard .muted{font-size:.9rem}
+}
+</style>
+<section class="growth-dashboard my-4" aria-label="Business growth overview">
+ <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+  <div><div class="eyebrow">Business growth</div><h2 class="h4 fw-bold mb-1">How the business is growing</h2>
+  <div class="muted"><strong>Last 15 days:</strong> {{ current.start.strftime('%d %b') }}–{{ current.end.strftime('%d %b %Y') }} · <strong>Previous 15:</strong> {{ previous.start.strftime('%d %b') }}–{{ previous.end.strftime('%d %b %Y') }}</div></div>
+  <a href="/insights" class="btn btn-sm btn-outline-secondary">Refresh insights</a>
+ </div>
+ <div class="row g-3">
+  <div class="col-lg-8"><div class="growth-panel">
+   <div class="eyebrow">Channel performance</div><h3>Daily sales · Online vs Walk-in</h3>
+   <div class="d-flex flex-wrap align-items-baseline gap-3"><span class="metric">{{ rupees(current.sales) }}</span><span class="muted">Previous {{ rupees(previous.sales) }} · {% if growth.sales_change is not none %}{{ '%+.1f'|format(growth.sales_change) }}%{% else %}No previous sales baseline{% endif %}</span></div>
+   <div class="d-flex flex-wrap gap-3 small my-2">{% for line in growth.lines %}<span><i class="key" style="background:{{ line.color }}"></i>{{ line.name }}</span>{% endfor %}</div>
+   <div class="chart-scroll" tabindex="0" aria-label="Sales chart; swipe horizontally on small screens"><svg class="sales-chart" viewBox="0 0 850 265" role="img" aria-label="Daily channel sales over 30 days; shaded area is the latest 15 days">
+    <rect x="450" y="30" width="365" height="180" rx="8" fill="#eff6ff"/>
+    {% for frac in [0,0.5,1] %}<line x1="60" x2="815" y1="{{ 210-frac*170 }}" y2="{{ 210-frac*170 }}" stroke="#e2e8f0"/><text x="53" y="{{ 214-frac*170 }}" text-anchor="end">{{ '%.0f'|format(growth.max_axis*frac) }}</text>{% endfor %}
+    <text x="60" y="20">Daily sales (₹)</text><text x="470" y="20">Last 15 days</text>
+    {% for line in growth.lines %}<polyline fill="none" stroke="{{ line.color }}" stroke-width="2.5" stroke-linejoin="round" points="{{ line.points }}"/>{% endfor %}
+    {% for i in [0,7,14,21,29] %}<text x="{{ 60+i*26 }}" y="235" text-anchor="middle">{{ growth.daily[i].day.strftime('%d %b') }}</text>{% endfor %}
+   </svg></div><div class="muted chart-hint">Swipe the chart to see all 30 days, or open daily figures below.</div>
+   <details class="muted"><summary>View daily figures</summary><div class="table-wrap"><table class="table table-sm"><thead><tr><th>Date</th><th>Online</th><th>Walk-in</th><th>Other / missing</th></tr></thead><tbody>{% for day in growth.daily %}<tr><td>{{ day.day.strftime('%d %b') }}</td><td>{{ rupees(day.Online) }}</td><td>{{ rupees(day['Walk-in']) }}</td><td>{{ rupees(day['Other / missing']) }}</td></tr>{% endfor %}</tbody></table></div></details>
+  </div></div>
+  <div class="col-lg-4"><div class="growth-panel">
+   <div class="eyebrow">Customer mix</div><h3>New vs repeat customers</h3>
+   {% for p,label in [(current,'Last 15 days'),(previous,'Previous 15 days')] %}
+    <div class="small fw-bold mt-3 mb-2">{{ label }}</div><div class="d-flex track" style="height:16px">{% for c in p.cohorts %}<div style="width:{{ c.share }}%;background:{{ '#2563eb' if c.name=='New' else '#0d9488' }}" title="{{ c.name }}: {{ c.customers }} customers"></div>{% endfor %}</div>
+    {% for c in p.cohorts %}<div class="small mt-2"><span class="key" style="background:{{ '#2563eb' if c.name=='New' else '#0d9488' }}"></span>{{ c.name }}: <strong>{{ c.customers }}</strong> unique ({{ '%.0f'|format(c.share) }}%)<div class="muted">{{ rupees(c.sales) }} · {{ '%.0f'|format(c.sales_share) }}% of sales</div></div>{% endfor %}
+   {% endfor %}
+   <div class="muted mt-3">New = first recorded non-cancelled bill in that period. Repeat = first bill before the period. Each customer counts once per period, even with several bills.</div>
+  </div></div>
+  <div class="col-lg-6"><div class="growth-panel"><div class="eyebrow">Order value</div><h3>Which channel brings more value?</h3>
+   <div class="table-wrap channel-table"><table class="table align-middle"><thead><tr><th>Channel</th><th>Last 15 days</th><th>Previous 15 days</th></tr></thead><tbody>
+   {% for c in current.channels %}{% set old=previous.channels[loop.index0] %}{% if c.count or old.count or c.name!='Other / missing' %}<tr><th>{{ c.name }}</th><td><strong>{{ rupees(c.average) }}</strong> / bill<div class="muted">{{ c.count }} bills · {{ rupees(c.sales) }}</div></td><td><strong>{{ rupees(old.average) }}</strong> / bill<div class="muted">{{ old.count }} bills · {{ rupees(old.sales) }}</div></td></tr>{% endif %}{% endfor %}
+   </tbody></table></div>
+   <div class="channel-cards">
+   {% for c in current.channels %}{% set old=previous.channels[loop.index0] %}{% if c.count or old.count or c.name!='Other / missing' %}
+   <div class="border rounded p-3 mb-3"><strong>{{ c.name }}</strong><div class="channel-periods mt-2">
+    <div><div class="muted">Last 15 days</div><strong>{{ rupees(c.average) }}</strong> / bill<div class="muted">{{ c.count }} bills<br>{{ rupees(c.sales) }} sales</div></div>
+    <div><div class="muted">Previous 15 days</div><strong>{{ rupees(old.average) }}</strong> / bill<div class="muted">{{ old.count }} bills<br>{{ rupees(old.sales) }} sales</div></div>
+   </div></div>{% endif %}{% endfor %}
+   </div><div class="muted">Bill count shows volume; average bill shows order value. A period with no valid sales amounts has no average (displayed as ₹0.00).</div>
+  </div></div>
+  <div class="col-lg-6"><div class="growth-panel"><div class="eyebrow">Service mix</div><h3>What are customers buying?</h3><div class="muted mb-3">Blue: last 15 days · Grey: previous 15 days</div>
+   {% for service in growth.services %}<div class="small fw-bold mb-1">{{ service.name }}</div><div class="d-flex align-items-center gap-2 mb-1"><div class="track flex-grow-1"><div class="bar" style="width:{{ service.current_width }}%;background:#2563eb"></div></div><span class="small">{{ rupees(service.current) }}</span></div><div class="d-flex align-items-center gap-2 mb-3"><div class="track flex-grow-1"><div class="bar" style="width:{{ service.previous_width }}%;background:#94a3b8"></div></div><span class="small">{{ rupees(service.previous) }}</span></div>{% else %}<div class="muted">No service sales in these periods.</div>{% endfor %}
+   <div class="muted">Bill discounts and express charges are allocated proportionally to line value. Top five services, with the rest combined.</div>
+  </div></div>
+  <div class="col-lg-6"><div class="growth-panel"><div class="eyebrow">Demand pattern</div><h3>Which days bring orders?</h3><div class="muted mb-3">Average bills per occurrence of each weekday, including zero-order days.</div>
+   <div class="chart-scroll" tabindex="0" aria-label="Weekday chart; swipe horizontally on small screens"><svg class="weekday-chart" viewBox="0 0 560 180" role="img" aria-label="Average orders by weekday, blue last 15 days and grey previous 15 days">
+    {% set ns=namespace(maximum=1) %}{% for p in [current,previous] %}{% for w in p.weekdays %}{% if w.average>ns.maximum %}{% set ns.maximum=w.average %}{% endif %}{% endfor %}{% endfor %}
+    {% for w in current.weekdays %}{% set old=previous.weekdays[loop.index0] %}{% set x=20+loop.index0*77 %}
+    <rect x="{{ x }}" y="{{ 135-w.average/ns.maximum*100 }}" width="24" height="{{ w.average/ns.maximum*100 }}" rx="3" fill="#2563eb"/><rect x="{{ x+26 }}" y="{{ 135-old.average/ns.maximum*100 }}" width="24" height="{{ old.average/ns.maximum*100 }}" rx="3" fill="#94a3b8"/>
+    <text x="{{ x+12 }}" y="{{ 128-w.average/ns.maximum*100 }}" text-anchor="middle">{{ '%.1f'|format(w.average) }}</text><text x="{{ x+38 }}" y="{{ 128-old.average/ns.maximum*100 }}" text-anchor="middle">{{ '%.1f'|format(old.average) }}</text><text x="{{ x+25 }}" y="160" text-anchor="middle">{{ w.name }}</text>{% endfor %}
+   </svg></div><div class="muted chart-hint">Swipe to see all weekdays.</div><div class="muted">Blue: last 15 days · Grey: previous 15 days. Averages make different weekday counts comparable.</div>
+  </div></div>
+  <div class="col-lg-6"><div class="growth-panel"><div class="eyebrow">Early retention</div><h3>Do first-time customers return?</h3><div class="muted mb-3">Another non-cancelled bill within 15 days of their first bill.</div>
+   {% for p,label in [(growth.retention_current,'Latest eligible group'),(growth.retention_previous,'Previous eligible group')] %}<div class="d-flex justify-content-between border-bottom py-3"><div><strong>{{ label }}</strong><div class="muted">First bill {{ p.start.strftime('%d %b') }}–{{ p.end.strftime('%d %b') }}</div><div class="muted">{{ p.returned }} returned / {{ p.total }} new customers</div></div><div class="metric">{% if p.rate is not none %}{{ '%.0f'|format(p.rate) }}%{% else %}—{% endif %}</div></div>{% endfor %}
+   <div class="muted mt-3">These older groups each have a full 15-day follow-up window. Recent first-time customers are excluded until that window ends. No eligible customers = no rate.</div>
+  </div></div>
+ </div>
+ <div class="muted mt-3">Snapshot on refresh · Hyderabad business date · latest period includes today so far. Sales = full bill value after discounts and express charges, before wallet use and advances; not cash collected. Cancelled bills excluded. Customer history means records available in this app.</div>
+ {% if growth.invalid_amounts %}<div class="alert alert-warning small mt-2" role="status">Sales data incomplete: {{ growth.invalid_amounts }} bills in these 30 days have invalid amounts. Their values are excluded from sales charts, sales shares, service mix and average bill calculations. Bill counts, customer history and return rates still include these bills; average bill uses only bills with valid values. Stored bills are unchanged.</div>{% endif %}
+ {% if growth.invalid_dates %}<div class="alert alert-warning small mt-2">{{ growth.invalid_dates }} non-cancelled bills have missing or invalid bill dates and cannot be included in date-based insights.</div>{% endif %}
+</section>

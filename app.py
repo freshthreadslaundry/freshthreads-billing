@@ -16,6 +16,8 @@ sqlite3.register_adapter(date, lambda d: d.isoformat())
 sqlite3.register_adapter(_dt_datetime, lambda dt: dt.isoformat(timespec="seconds"))
 
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+from growth_insights import growth_insights
 from flask import jsonify
 import qrcode
 import os
@@ -32,6 +34,7 @@ from flask_cors import CORS
 # === Customer Insights thresholds (tune anytime) ===
 VIP_MIN_SPEND = 5000          # ₹ threshold for VIP / review candidates
 LAPSED_DAYS = 45              # inactive if not visited in N days
+OUTSTANDING_CUTOFF = "2026-05-31"
 MIN_VISITS_FOR_REVIEW = 2     # prefer repeat customers for review ask
 
 app = Flask(__name__, instance_relative_config=True)
@@ -841,6 +844,14 @@ def generate_pdf(bill_id):
                      download_name=f'invoice_{bill_id}.pdf')
 
 
+@app.route("/insights")
+@login_required
+def insights():
+    conn = get_db_connection()
+    return render_template("insights.html", growth=growth_insights(
+        conn, datetime.now(ZoneInfo("Asia/Kolkata")).date()))
+
+
 @app.route("/reports", methods=["GET"])
 @login_required
 def reports():
@@ -885,7 +896,8 @@ def reports():
         end_date=end_date,
         total_amount=total_amount,
         total_advance=total_advance,
-        total_balance=total_balance
+        total_balance=total_balance,
+        outstanding_cutoff_label=date.fromisoformat(OUTSTANDING_CUTOFF).strftime("%d %b %Y")
     )
 
 def excel_response(df, filename):
@@ -1040,14 +1052,27 @@ def cancel_bill():
 def bill_embed(bill_id):
     return render_template('invoice_embed.html', **invoice_context(bill_id=bill_id))
 
-@app.route("/api/outstanding-report")
-def outstanding_report():
+def outstanding_scope():
+    scope = request.args.get('scope', 'current')
+    if scope not in ('current', 'arrears', 'undated'):
+        abort(400, description='Scope must be current, arrears, or undated')
+    return scope
+
+
+def outstanding_rows(scope):
+    # Date buckets partition the existing unpaid-or-undelivered work queue.
+    date_filter = {
+        'current': 'DATE(b.delivery_date) > ?',
+        'arrears': 'DATE(b.delivery_date) <= ?',
+        'undated': 'DATE(b.delivery_date) IS NULL',
+    }[scope]
+    parameters = () if scope == 'undated' else (OUTSTANDING_CUTOFF,)
     conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT b.id AS bill_id, b.delivery_date,
+    return conn.execute(f"""
+        SELECT b.id AS bill_id, b.delivery_date, DATE(b.delivery_date) AS delivery_day,
                c.name AS customer_name, c.phone AS customer_phone,
-               sum(bi.items) as items, CASE WHEN s.payment_status='Paid' THEN 0 ELSE b.balance_amount END AS balance_amount,
+               SUM(bi.items) AS items,
+               CASE WHEN s.payment_status='Paid' THEN 0 ELSE b.balance_amount END AS balance_amount,
                s.payment_status, s.delivery_status
         FROM bills b
         JOIN customers c ON b.customer_id = c.id
@@ -1055,11 +1080,16 @@ def outstanding_report():
         LEFT JOIN bill_status s ON b.id = s.bill_id
         WHERE b.void != 1
           AND (s.payment_status != 'Paid' OR s.delivery_status != 'Delivered')
-                GROUP BY bi.bill_id, b.delivery_Date, c.name, c.phone, b.balance_amount, s.payment_status, s.delivery_status
-        ORDER BY b.date DESC
-    """)
-    rows = cur.fetchall()
-    return jsonify([dict(row) for row in rows])
+          AND {date_filter}
+        GROUP BY b.id
+        ORDER BY b.date DESC, b.id DESC
+    """, parameters).fetchall()
+
+
+@app.route('/api/outstanding-report')
+def outstanding_report():
+    rows = outstanding_rows(outstanding_scope())
+    return jsonify([{key: row[key] for key in row.keys() if key != 'delivery_day'} for row in rows])
 
 @app.route("/api/mark-paid", methods=["POST"])
 def mark_paid():
@@ -1106,55 +1136,24 @@ def mark_delivered():
 @app.route("/outstanding_summary")
 @login_required
 def outstanding_summary():
-    conn = get_db_connection()
-    cur = conn.cursor()
+    scope = outstanding_scope()
+    rows = outstanding_rows(scope)
     today = datetime.now().date()
     tomorrow = today + timedelta(days=1)
-
-    # Pending Deliveries Today
-    cur.execute("""
-        SELECT COUNT(*)
-        FROM bills
-        JOIN bill_status ON bills.id = bill_status.bill_id
-        WHERE date(delivery_date) = ? AND bill_status.delivery_status = 'Not Delivered' AND bills.void = 0
-    """, (today,))
-    pending_today = cur.fetchone()[0]
-
-    # Pending Deliveries Tomorrow
-    cur.execute("""
-        SELECT COUNT(*)
-        FROM bills
-        JOIN bill_status ON bills.id = bill_status.bill_id
-        WHERE date(delivery_date) = ? AND bill_status.delivery_status = 'Not Delivered' AND bills.void = 0
-    """, (tomorrow,))
-    pending_tomorrow = cur.fetchone()[0]
-
-    # Pending Payments Count
-    cur.execute("""
-        SELECT COUNT(*)
-        FROM bill_status
-        JOIN bills ON bills.id = bill_status.bill_id
-        WHERE bill_status.payment_status = 'Pending' AND bills.void = 0
-    """)
-    pending_payment_count = cur.fetchone()[0]
-
-    # Pending Amount (only for pending payment bills)
-    cur.execute("""
-        SELECT SUM(bills.balance_amount)
-        FROM bills
-        JOIN bill_status ON bills.id = bill_status.bill_id
-        WHERE bill_status.payment_status = 'Pending' AND bills.void = 0
-    """)
-    pending_amount = cur.fetchone()[0] or 0.0
-
-    conn.close()
-    
+    pending = [row for row in rows if row['payment_status'] == 'Pending']
+    pending_amount = sum((money(row['balance_amount'] or 0) for row in pending), money(0))
+    undated_count = len(rows) if scope == 'undated' else len(outstanding_rows('undated'))
     return jsonify({
-        "pending_today": pending_today,
-        "pending_tomorrow": pending_tomorrow,
-        "pending_payment_count": pending_payment_count,
-        "pending_amount": f"{pending_amount:.2f}"
+        'scope': scope,
+        'cutoff': OUTSTANDING_CUTOFF,
+        'outstanding_bill_count': len(rows),
+        'undated_bill_count': undated_count,
+        'pending_today': sum(row['delivery_status'] == 'Not Delivered' and row['delivery_day'] == today.isoformat() for row in rows),
+        'pending_tomorrow': sum(row['delivery_status'] == 'Not Delivered' and row['delivery_day'] == tomorrow.isoformat() for row in rows),
+        'pending_payment_count': len(pending),
+        'pending_amount': f'{pending_amount:.2f}',
     })
+
 
 def sales_records(start, end):
     conn = get_db_connection()
