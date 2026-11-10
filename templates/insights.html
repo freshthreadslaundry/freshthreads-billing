@@ -15,10 +15,11 @@
   .insights-page .row>*{min-width:0}
   @media(max-width:575.98px){.insights-page .growth-dashboard{margin-top:20px!important}.insights-page h1{font-size:1.4rem}}
  </style>
+  <link rel="stylesheet" href="/static/css/mobile_navigation.css?v=1">
 </head>
-<body>
+<body class="mobile-home-page">
  <main class="insights-page">
-  <header class="insights-header"><h1>Insights</h1><a class="btn btn-outline-secondary" href="/">Home</a></header>
+  <header class="insights-header"><h1>Insights</h1><a class="mobile-home-button btn btn-outline-secondary" href="/">Home</a></header>
   {% include 'growth_dashboard.html' %}
  </main>
 </body>

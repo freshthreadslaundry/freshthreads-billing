@@ -1,0 +1,29 @@
+/* Keep staff navigation clear of status bars and app overlays on phones. */
+@media (max-width: 768px) {
+  body.mobile-home-page {
+    padding-top: calc(56px + env(safe-area-inset-top, 0px)) !important;
+  }
+  .mobile-home-page a.mobile-home-button {
+    position: relative !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    min-width: 104px;
+    width: auto !important;
+    padding: 12px 20px !important;
+    margin: 8px 0 12px !important;
+    line-height: 1.25;
+    touch-action: manipulation;
+  }
+  .mobile-home-page .reports-topbar,
+  .mobile-home-page .insights-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+}
+@media print {
+  .mobile-home-page a.mobile-home-button { display: none !important; }
+  body.mobile-home-page { padding-top: 0 !important; }
+}
