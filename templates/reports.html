@@ -30,6 +30,18 @@
       background-color: #f1f1f1;
       cursor: pointer;
     }
+    .bill-action {border-radius:999px;font-weight:600;white-space:nowrap;min-height:36px;padding:6px 12px;box-shadow:0 2px 5px #14283c12;transition:transform .15s,box-shadow .15s;}
+    .bill-action:hover {transform:translateY(-1px);box-shadow:0 4px 9px #14283c24;}
+    .bill-action:disabled {transform:none;box-shadow:none;cursor:wait;}
+    .bill-action-paid {color:#a12636;background:#fff0f1;border:1px solid #efb3bc;}
+    .bill-action-paid:hover {color:#861d2b;background:#ffe0e5;border-color:#d97b8b;}
+    .bill-action-delivered {color:#a12636;background:#fff0f1;border:1px solid #efb3bc;}
+    .bill-action-delivered:hover {color:#861d2b;background:#ffe0e5;border-color:#d97b8b;}
+    .bill-status {display:inline-flex;align-items:center;gap:5px;border-radius:999px;font-weight:700;white-space:nowrap;padding:6px 12px;min-height:36px;}
+    .bill-status-paid {color:#11633c;background:#d9f5e5;border:1px solid #8bcba6;}
+    .bill-status-delivered {color:#11633c;background:#d9f5e5;border:1px solid #8bcba6;}
+    .bill-action:focus-visible {outline:3px solid #f0ad4e;outline-offset:2px;}
+    @media(prefers-reduced-motion:reduce){.bill-action{transition:none}.bill-action:hover{transform:none}}
   </style>
 </head>
 <body>
@@ -357,10 +369,10 @@
         <td>${row.total}</td>
         <td>${formatDate(row.delivery_date)}</td>
         <td style="color: ${row.payment_status === 'Paid' ? 'green' : 'red'}">
-            ${showBillId ? (row.payment_status === 'Paid' ? '✅ Paid' : '❌ Unpaid') : ''}
+            ${showBillId ? (row.payment_status === 'Paid' ? '<span class="bill-status bill-status-paid"><span aria-hidden="true">✓</span> Paid</span>' : '❌ Unpaid') : ''}
         </td>
         <td style="color: ${row.delivery_status === 'Delivered' ? 'green' : 'red'}">
-            ${showBillId ? (row.delivery_status === 'Delivered' ? '✅ Delivered' : '❌ Not Delivered') : ''}
+            ${showBillId ? (row.delivery_status === 'Delivered' ? '<span class="bill-status bill-status-delivered"><span aria-hidden="true">✓</span> Delivered</span>' : '❌ Not Delivered') : ''}
         </td>
     </tr>`;
                         lastBillId = row.bill_id;
@@ -395,13 +407,13 @@
             const totalDue = rows.reduce((sum, row) => sum + Number(row.balance_amount || 0), 0);
             return `<div class="table-responsive"><table class="table table-sm table-bordered mt-3">
               <thead><tr><th>Bill ID</th><th>Customer</th><th>Phone</th><th>Items</th><th>Amount Due</th><th>Delivery Date</th><th>Payment</th><th>Delivery</th></tr></thead>
-              <tbody>${rows.map(row => `<tr>
+              <tbody>${rows.map(row => `<tr data-bill-id="${row.bill_id}">
                 <td><a href="/bill/${row.bill_id}" target="_blank">#${row.bill_id}</a></td>
                 <td>${escapeText(row.customer_name)}</td><td>${escapeText(row.customer_phone)}</td>
                 <td>${row.items}</td><td>₹${amountText(row.balance_amount)}</td>
                 <td>${row.delivery_date && !Number.isNaN(new Date(row.delivery_date).getTime()) ? formatDate(row.delivery_date) : 'Date needs review'}</td>
-                <td data-role="payment">${row.payment_status === 'Paid' ? '✅ Paid' : `<button class="btn btn-sm btn-outline-success" onclick="markPaid(${row.bill_id})">Mark Paid</button>`}</td>
-                <td data-role="delivery">${row.delivery_status === 'Delivered' ? '✅ Delivered' : `<button class="btn btn-sm btn-outline-primary" onclick="markDelivered(${row.bill_id})">Mark Delivered</button>`}</td>
+                <td data-role="payment">${row.payment_status === 'Paid' ? '<span class="bill-status bill-status-paid"><span aria-hidden="true">✓</span> Paid</span>' : `<button type="button" class="btn btn-sm bill-action bill-action-paid" aria-label="Mark bill ${row.bill_id} as paid" onclick="markPaid(${row.bill_id}, this)">Paid?</button>`}</td>
+                <td data-role="delivery">${row.delivery_status === 'Delivered' ? '<span class="bill-status bill-status-delivered"><span aria-hidden="true">✓</span> Delivered</span>' : `<button type="button" class="btn btn-sm bill-action bill-action-delivered" aria-label="Mark bill ${row.bill_id} as delivered" onclick="markDelivered(${row.bill_id}, this)">Delivered?</button>`}</td>
               </tr>`).join('')}</tbody>
               ${footer ? `<tfoot><tr><td colspan="4" class="text-end fw-semibold">Customer Total</td><td class="fw-semibold">₹${amountText(totalDue)}</td><td colspan="3"></td></tr></tfoot>` : ''}
             </table></div>`;
@@ -423,7 +435,7 @@
             return heading + `<div class="accordion mt-3" id="custAccordion">${sorted.map((group, index) => {
               const id = `outstanding-customer-${index}`;
               const totalDue = group.rows.reduce((sum, row) => sum + Number(row.balance_amount || 0), 0);
-              return `<div class="accordion-item">
+              return `<div class="accordion-item" data-group-key="${encodeURIComponent(JSON.stringify([group.rows[0].customer_name || 'Unknown', group.rows[0].customer_phone || '']))}">
                 <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#${id}" aria-expanded="false" aria-controls="${id}">
                   <span class="fw-semibold">${escapeText(group.label)}</span><span class="badge bg-warning text-dark ms-3">₹${amountText(totalDue)}</span>
                 </button></h2>
@@ -432,7 +444,14 @@
             }).join('')}</div>`;
           }
 
-          async function loadOutstanding(scope = 'current', grouped = false, verifyPassword = true) {
+          async function loadOutstanding(scope = 'current', grouped = false, verifyPassword = true, preservePosition = false) {
+            const results = document.getElementById('reportResults');
+            const position = preservePosition ? {
+              x: window.scrollX, y: window.scrollY,
+              rows: Array.from(results.querySelectorAll('tr[data-bill-id]')).filter(row => row.getClientRects().length).map(row => ({id:row.dataset.billId, top:row.getBoundingClientRect().top})).filter(row => row.top >= -40),
+              groups: Array.from(results.querySelectorAll('.accordion-item')).map(group => ({key:group.dataset.groupKey, open:!!group.querySelector('.accordion-collapse.show'), left:group.querySelector('.table-responsive')?.scrollLeft || 0})),
+              left:results.querySelector('.table-responsive')?.scrollLeft || 0
+            } : null;
             const requestVersion = ++outstandingRequestVersion;
 {% if config.get('OUTSTANDING_PASSWORD_REQUIRED', True) %}
             if (verifyPassword && !(await checkAdminPassword('Enter admin password to view this report:'))) return;
@@ -441,9 +460,9 @@
             activeOutstandingView = {scope, grouped};
             document.getElementById('expenseReportTable').innerHTML = '';
             document.getElementById('resultsTable')?.remove();
-            document.getElementById('reportResults').innerHTML = '<p>Loading outstanding bills...</p>';
+            if (!preservePosition) document.getElementById('reportResults').innerHTML = '<p>Loading outstanding bills...</p>';
             document.getElementById('selected-summary').classList.remove('d-none');
-            document.getElementById('summary-content').innerHTML = '<p>Loading selected summary...</p>';
+            if (!preservePosition) document.getElementById('summary-content').innerHTML = '<p>Loading selected summary...</p>';
             const read = async url => {
               const response = await fetch(url);
               if (!response.ok) throw new Error(response.status === 401 ? 'Please log in again.' : 'Could not load this report. Please try again.');
@@ -455,7 +474,29 @@
               ]);
               if (requestVersion !== outstandingRequestVersion) return;
               updateSummaryBox(summary, 'outstanding');
+              const previousMinHeight = results.style.minHeight;
+              if (position) results.style.minHeight = `${results.offsetHeight}px`;
               document.getElementById('reportResults').innerHTML = renderOutstanding(rows, scope, grouped);
+              if (position) {
+                results.querySelectorAll('.accordion-item').forEach(group => {
+                  const saved = position.groups.find(item => item.key === group.dataset.groupKey);
+                  if (!saved) return;
+                  if (saved.open) {
+                    group.querySelector('.accordion-collapse').classList.add('show');
+                    group.querySelector('.accordion-button').classList.remove('collapsed');
+                    group.querySelector('.accordion-button').setAttribute('aria-expanded','true');
+                  }
+                  group.querySelector('.table-responsive').scrollLeft = saved.left;
+                });
+                if (!grouped && results.querySelector('.table-responsive')) results.querySelector('.table-responsive').scrollLeft = position.left;
+                results.style.minHeight = previousMinHeight;
+                requestAnimationFrame(() => {
+                  if (requestVersion !== outstandingRequestVersion) return;
+                  const anchor = position.rows.find(saved => results.querySelector(`tr[data-bill-id="${saved.id}"]`));
+                  const offset = anchor ? results.querySelector(`tr[data-bill-id="${anchor.id}"]`).getBoundingClientRect().top - anchor.top : 0;
+                  window.scrollTo({left:position.x, top:anchor ? window.scrollY + offset : position.y, behavior:'instant'});
+                });
+              }
               document.getElementById('runUndatedOutstandingBtn').classList.toggle('d-none', !summary.undated_bill_count);
               [['runOutstandingBtn', scope === 'current' && !grouped], ['runOutstandingByCustomerBtn', scope === 'current' && grouped],
                ['runArrearsBtn', scope === 'arrears'], ['runUndatedOutstandingBtn', scope === 'undated']].forEach(([id, selected]) => {
@@ -463,6 +504,7 @@
               });
             } catch (error) {
               if (requestVersion !== outstandingRequestVersion) return;
+              if (preservePosition) { alert(error.message); return; }
               document.getElementById('summary-content').innerHTML = '<p>Summary unavailable.</p>';
               document.getElementById('reportResults').innerHTML = `<p class="text-danger">${escapeText(error.message)}</p>`;
             }
@@ -551,7 +593,10 @@
                       });
                     });
                     
-                    async function updateOutstandingBill(action, billId) {
+                    async function updateOutstandingBill(action, billId, button) {
+                      if (button?.disabled) return;
+                      if (button) { button.disabled = true; button.setAttribute('aria-busy','true'); }
+
                       try {
                         const response = await fetch(`/api/${action}`, {
                           method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -560,12 +605,13 @@
                         const result = await response.json();
                         if (!response.ok || !result.success) throw new Error(result.message || 'Could not update the bill.');
                         if (activeOutstandingView) {
-                          await loadOutstanding(activeOutstandingView.scope, activeOutstandingView.grouped, false);
+                          await loadOutstanding(activeOutstandingView.scope, activeOutstandingView.grouped, false, true);
                         }
                       } catch (error) { alert(error.message); }
+                      finally { if (button) { button.disabled = false; button.removeAttribute('aria-busy'); } }
                     }
-                    window.markPaid = billId => updateOutstandingBill('mark-paid', billId);
-                    window.markDelivered = billId => updateOutstandingBill('mark-delivered', billId);
+                    window.markPaid = (billId, button) => updateOutstandingBill('mark-paid', billId, button);
+                    window.markDelivered = (billId, button) => updateOutstandingBill('mark-delivered', billId, button);
 
                     document.getElementById("generateForm").addEventListener("submit", function (e) {
                       leaveOutstandingView();

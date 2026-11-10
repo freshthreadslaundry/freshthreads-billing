@@ -106,3 +106,9 @@ Cancelled bills and future-dated bills are excluded. Invalid/missing bill dates 
 Historical invalid amounts do not block Reports. Only the displayed 30-day bills need sales calculations; older dated bills still establish customer history. Invalid amounts inside that window are excluded from monetary aggregates with an explicit incomplete-sales warning. Bill counts and customer classifications remain intact; channel average bill values divide by the count of valid-valued bills. Stored records are never corrected by the analytics.
 
 Insights navigation/mobile update: Home now has an Insights button to /insights. Refresh stays on /insights, with Home navigation back. On phones the page uses stacked panels, 44px minimum navigation targets, safe-area padding, compact channel comparison cards, and horizontally scrollable charts/tables. Layout checked at 360px and 390px in browser preview frames using synthetic data. No app package or AWS deployment was performed; a hosted WebView app needs the website deployment to receive these changes.
+
+## Report action position
+
+Before: Paid/Delivered actions replaced a long report with a short loading message, collapsing the document and moving desktop users upward. Now: action refreshes keep the existing report visible until new totals and rows arrive, retain expanded customer groups and table horizontal position, and restore a visible bill anchor after rendering. If a settled row disappears, the surrounding report remains in view. Errors leave the prior report visible.
+
+Action buttons now read Paid and Delivered, with rounded colour-coded styling, keyboard focus indicators, and a disabled/busy state during the request. Their accessible labels still describe the action. Existing payment/delivery endpoints and business rules are unchanged. Desktop checks used a 75-bill disposable report; no real bill status was modified.
