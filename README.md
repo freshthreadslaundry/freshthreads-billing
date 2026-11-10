@@ -112,3 +112,11 @@ Insights navigation/mobile update: Home now has an Insights button to /insights.
 Before: Paid/Delivered actions replaced a long report with a short loading message, collapsing the document and moving desktop users upward. Now: action refreshes keep the existing report visible until new totals and rows arrive, retain expanded customer groups and table horizontal position, and restore a visible bill anchor after rendering. If a settled row disappears, the surrounding report remains in view. Errors leave the prior report visible.
 
 Action buttons now read Paid and Delivered, with rounded colour-coded styling, keyboard focus indicators, and a disabled/busy state during the request. Their accessible labels still describe the action. Existing payment/delivery endpoints and business rules are unchanged. Desktop checks used a 75-bill disposable report; no real bill status was modified.
+
+## Laundry-themed Home
+
+Home now has self-contained laundry artwork, a warm cream/green palette, subtle floating bubbles, and navigation cards. Billing remains first and Insights second; all seven existing destinations remain available. Phone navigation uses two columns with Expense Types across the last row. No external fonts, images or JavaScript are required for the decoration. Animation respects reduced-motion settings and links have visible keyboard focus. Business data and billing behaviour are unchanged.
+
+## Reports visual design
+
+Reports now has a lavender/coral/golden paperwork illustration, bold introductory heading and pastel report panels, distinct from the laundry-themed Home page. On desktop, Sales spans the tools grid above two paired rows; phone panels stack vertically. Existing forms, control IDs, report scopes, status actions and position-preserving refresh remain intact. Panel headings are native buttons for keyboard activation. Decorative movement respects reduced-motion preferences. No customer information or fabricated statistics is introduced by the illustration. Local browser checks covered the default desktop layout, 390px phone fit and loading Outstanding from the new panel.

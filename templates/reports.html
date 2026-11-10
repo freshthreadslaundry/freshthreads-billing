@@ -1,6 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="utf-8">
+  <meta name="theme-color" content="#f1effb">
   <title>Reports - Fresh Threads</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/static/css/mobile.css">
@@ -42,21 +44,80 @@
     .bill-status-delivered {color:#11633c;background:#d9f5e5;border:1px solid #8bcba6;}
     .bill-action:focus-visible {outline:3px solid #f0ad4e;outline-offset:2px;}
     @media(prefers-reduced-motion:reduce){.bill-action{transition:none}.bill-action:hover{transform:none}}
+
+    body{background:#f1effb;color:#272239}
+    .reports-page{max-width:1160px}
+    .reports-topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid #d8d3e5;padding:0 0 18px}
+    .reports-brand{font-weight:750;font-size:19px;letter-spacing:-.6px;display:flex;align-items:center;gap:10px}
+    .reports-brand-mark{display:grid;place-items:center;background:#7453cc;color:white;width:38px;height:38px;border-radius:12px;font-size:20px}
+    .reports-topbar a{min-height:44px;display:inline-flex;align-items:center;border:1px solid #c8bfdc;color:#483d64;background:#fbfaff;border-radius:24px;padding:9px 18px;text-decoration:none;font-size:13px;font-weight:600}
+    .reports-hero{display:grid;grid-template-columns:1.1fr 1fr;gap:20px;align-items:center;padding:28px 0 26px}
+    .reports-kicker{font-size:10px;letter-spacing:2px;font-weight:750;text-transform:uppercase;color:#7453cc;margin-bottom:12px}
+    .reports-hero h1{font-size:clamp(44px,5.6vw,68px);line-height:1.02;letter-spacing:-3px;font-weight:850;margin:0 0 17px}
+    .reports-hero h1 span{color:#7851d2;display:inline-block;background:#e4dcff;padding:0 7px 6px;border-radius:8px;transform:rotate(-2deg)}
+    .reports-hero p{font-size:14px;line-height:1.7;max-width:345px;color:#6b637b;margin:0}
+    .report-sticker{display:inline-block;margin-top:18px;font-size:11px;font-weight:650;color:#6e4c10;background:#ffe7a4;border:1px solid #ebcf83;padding:7px 12px;border-radius:22px}
+    .report-art{width:100%;max-height:285px;display:block}
+    .reports-tools-label{display:flex;justify-content:space-between;align-items:center;margin:0 0 13px;font-size:11px;color:#756b85}
+    .reports-tools-label h2{font-size:14px;font-weight:700;margin:0;color:#322a44}
+    .report-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;align-items:start}
+    .report-tools>.card{margin:0!important;border:1px solid #d5cde4;border-radius:16px;overflow:hidden;background:#fffeff;box-shadow:0 3px 0 #d9d2e9!important}
+    .report-tools>.card:first-child{grid-column:1/-1}
+    .report-tools .card-header{width:100%;min-height:68px;padding:17px 19px;border:0;border-radius:0;gap:12px;text-align:left;color:#302745;background:#e4dcff!important;transition:filter .15s;cursor:pointer}
+    .report-tools>.card:nth-child(2) .card-header{background:#ffebaf!important}
+    .report-tools>.card:nth-child(3) .card-header{background:#ffd9ce!important}
+    .report-tools>.card:nth-child(4) .card-header{background:#d4eee7!important}
+    .report-tools>.card:nth-child(5) .card-header{background:#dce8ff!important}
+    .report-tools .card-header:hover{filter:brightness(.97)}
+    .report-tools .card-header:focus-visible{outline:3px solid #7051be;outline-offset:-4px}
+    .report-tools .card-header .text-muted{font-size:10px;font-weight:600!important;text-transform:uppercase;letter-spacing:.7px;background:#ffffff75;border-radius:20px;padding:5px 9px;color:#625574!important;flex-shrink:0}
+    .report-tools .card-header[aria-expanded="true"] .text-muted{background:#ffffffbd}
+    .report-tools .card-body{padding:20px}
+    .reports-footer{margin:22px 0 0;display:flex;justify-content:space-between;gap:15px;align-items:center;font-size:11px;color:#7b708b;border-top:1px dashed #cfc6df;padding-top:15px}
+    .reports-footer strong{font-weight:600;color:#77628e}
+    .report-spark{animation:report-bob 5s ease-in-out infinite;transform-origin:center}
+    @keyframes report-bob{50%{transform:translateY(-5px)}}
+    @media(max-width:767px){
+      .reports-hero{gap:8px;padding-top:24px;grid-template-columns:1fr .85fr}
+      .reports-hero h1{font-size:45px;letter-spacing:-2px}.reports-hero p{font-size:12px}.report-sticker{font-size:10px}
+      .report-tools .row>.col-md-3,.report-tools .row>.col-md-6{width:100%}
+      .report-tools .card-header{flex-direction:row;align-items:center;text-align:left;font-size:14px;min-height:68px}
+    }
+    @media(max-width:575px){
+      .reports-hero{grid-template-columns:1fr;padding:24px 0 18px;gap:5px}.reports-hero h1{font-size:48px}.reports-hero p{max-width:300px;font-size:13px}
+      .report-art{max-height:195px;margin-top:2px}.report-sticker{margin-top:12px}.reports-brand{font-size:17px}
+      .report-tools{grid-template-columns:1fr;gap:12px}.report-tools .card-header{padding:16px;min-height:68px}
+      .reports-footer{font-size:10px;flex-wrap:wrap;gap:6px}.reports-tools-label{font-size:10px}.reports-tools-label h2{font-size:13px}
+      .reports-topbar a{font-size:12px}.report-tools .card-body{padding:16px}
+    }
+    @media(prefers-reduced-motion:reduce){.report-spark{animation:none}.report-tools .card-header{transition:none}}
   </style>
 </head>
 <body>
-  <div class="container py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-      <h2 class="fw-bold text-primary mb-0">📊 Reports Dashboard</h2>
-      <a class="btn btn-outline-secondary" href="/">🏠 Home</a>
-    </div>
-    
+  <div class="container py-4 reports-page">
+    <header class="reports-topbar"><div class="reports-brand"><span class="reports-brand-mark" aria-hidden="true">✳</span>FreshThreads <span style="font-weight:400;color:#92879f">/ Reports</span></div><a href="/">← Home</a></header>
+    <section class="reports-hero" aria-labelledby="reports-title">
+      <div><div class="reports-kicker">Fresh perspective. All in order.</div><h1 id="reports-title">The bigger<br><span>picture.</span></h1><p>From the daily details to the loose ends.<br>Find your report. Make room for a clearer day.</p><div class="report-sticker">✦ A fresh spin on the paperwork.</div></div>
+      <svg class="report-art" viewBox="0 0 480 300" role="img" aria-label="Playful illustration of a tidy report folder, receipts and a magnifying glass">
+        <ellipse cx="242" cy="268" rx="175" ry="15" fill="#e3dced"/>
+        <path d="M68 215q-32-90 43-152t189-23q117 28 110 125t-129 100z" fill="#e4dcff"/>
+        <g transform="rotate(-12 140 143)"><rect x="83" y="63" width="116" height="162" rx="12" fill="#fffdf5" stroke="#493465" stroke-width="2.5"/><path d="M100 86h54M100 98h79" stroke="#c1b4d5" stroke-width="5" stroke-linecap="round"/><rect x="102" y="121" width="22" height="23" rx="5" fill="#ffd578"/><rect x="132" y="121" width="46" height="23" rx="5" fill="#dfd4f3"/><path d="M102 163h75M102 177h60M102 190h70" stroke="#ddd5e7" stroke-width="5" stroke-linecap="round"/></g>
+        <path d="M140 147v-24q0-11 11-11h72l19 21h104q12 0 12 12v99H140z" fill="#a48ae3" stroke="#493465" stroke-width="2.5"/>
+        <g transform="rotate(9 282 124)"><path d="M235 47h97v132l-12-6-12 6-12-6-12 6-12-6-12 6-12-6-13 6z" fill="#fffdf5" stroke="#493465" stroke-width="2.5"/><path d="M252 70h61M252 84h38" stroke="#cfc4df" stroke-width="5" stroke-linecap="round"/><circle cx="283" cy="121" r="20" fill="#d6eee4"/><path d="m273 121 7 7 14-16" stroke="#367b63" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/></g>
+        <path d="M125 163q-2-12 10-12h223q11 0 9 12l-14 87H141z" fill="#ffcd70" stroke="#493465" stroke-width="2.5"/><rect x="190" y="177" width="97" height="36" rx="18" fill="#ffebba"/><text x="238" y="200" text-anchor="middle" fill="#785b24" font-family="system-ui,sans-serif" font-size="14" font-weight="700">ALL IN ORDER</text><path d="M154 229h48" stroke="#e6aa45" stroke-width="4" stroke-linecap="round"/>
+        <g transform="rotate(-20 371 207)"><circle cx="371" cy="188" r="36" fill="#d2e9f4" fill-opacity=".9" stroke="#493465" stroke-width="8"/><path d="M371 224v39" stroke="#493465" stroke-width="13" stroke-linecap="round"/><path d="M353 177q1-13 16-15" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/></g>
+        <g class="report-spark"><path d="m389 54 6 16 16 6-16 6-6 16-6-16-16-6 16-6z" fill="#f39e8c" stroke="#bf6f6e" stroke-width="1.5"/><path d="m58 132 3 9 10 4-10 3-3 10-4-10-9-3 9-4z" fill="#a48ae3"/><circle cx="415" cy="126" r="7" fill="#f5cc70"/><circle cx="209" cy="39" r="5" fill="#f39e8c"/></g>
+        <g transform="rotate(8 87 244)"><rect x="38" y="224" width="122" height="31" rx="7" fill="#f5a796" stroke="#d88776"/><text x="99" y="244" text-anchor="middle" font-family="system-ui,sans-serif" font-size="11" font-weight="650" fill="#6c3b46">LESS PAPER CHASE.</text></g>
+      </svg>
+    </section>
+    <div class="reports-tools-label"><h2>What would you like to look into?</h2><span>Your reports, neatly sorted ↘</span></div>
+    <section class="report-tools" aria-label="Report tools">
     <!-- Sales Report Section -->
     <div class="card mb-3 shadow-sm">
-      <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#salesSection" role="button" aria-expanded="false">
+      <button type="button" class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#salesSection" role="button" aria-expanded="false">
         🧾 Sales Report
-        <span class="text-muted small">Click to toggle</span>
-      </div>
+        <span class="text-muted small">Open / close</span>
+      </button>
       <div class="collapse" id="salesSection">
         <div class="card-body">
           <form id="generateForm" action="/reports" method="GET">
@@ -80,10 +141,10 @@
     
     <!-- Daily Detail Report Section -->
     <div class="card mb-3 shadow-sm">
-      <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#dailySection" role="button" aria-expanded="false">
+      <button type="button" class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#dailySection" role="button" aria-expanded="false">
         📅 Daily Detail Report
-        <span class="text-muted small">Click to toggle</span>
-      </div>
+        <span class="text-muted small">Open / close</span>
+      </button>
       <div class="collapse" id="dailySection">
         <div class="card-body">
           <div class="row g-3 align-items-end">
@@ -101,11 +162,11 @@
     
 <!-- Outstanding Report Section -->
 <div class="card mb-3 shadow-sm">
-  <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center"
+  <button type="button" class="card-header bg-light fw-bold d-flex justify-content-between align-items-center"
        data-bs-toggle="collapse" data-bs-target="#outstandingSection" role="button" aria-expanded="false">
     💰 Outstanding Report
-    <span class="text-muted small">Click to toggle</span>
-  </div>
+    <span class="text-muted small">Open / close</span>
+  </button>
   <div class="collapse" id="outstandingSection">
     <div class="card-body">
       <p class="text-muted small">Outstanding shows delivery dates after {{ outstanding_cutoff_label }}. Earlier bills stay available in Arrears.</p>
@@ -122,10 +183,10 @@
     
     <!-- View and Cancel Bill Section -->
     <div class="card mb-3 shadow-sm">
-      <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#viewCancelSection" role="button" aria-expanded="false">
+      <button type="button" class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#viewCancelSection" role="button" aria-expanded="false">
         🔎 View / Cancel Bill
-        <span class="text-muted small">Click to toggle</span>
-      </div>
+        <span class="text-muted small">Open / close</span>
+      </button>
       <div class="collapse" id="viewCancelSection">
         <div class="card-body">
           <div class="row g-3">
@@ -150,10 +211,10 @@
     
     <!-- Expense Report Section -->
     <div class="card mb-3 shadow-sm">
-      <div class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#expenseSection" role="button" aria-expanded="false">
+      <button type="button" class="card-header bg-light fw-bold d-flex justify-content-between align-items-center" data-bs-toggle="collapse" data-bs-target="#expenseSection" role="button" aria-expanded="false">
         💸 Expenses Report
-        <span class="text-muted small">Click to toggle</span>
-      </div>
+        <span class="text-muted small">Open / close</span>
+      </button>
       <div class="collapse" id="expenseSection">
         <div class="card-body">
           <div class="d-flex gap-2 mb-3">
@@ -165,6 +226,9 @@
       </div>
     </div>
     
+
+    </section>
+    <div class="reports-footer"><strong>✳ Every little detail has its place.</strong><span>Fresh threads. Clear heads.</span></div>
 
     <div id="selected-summary" class="card summary-box shadow-sm mb-3 d-none"><div class="card-body" id="summary-content"></div></div>
     <!-- Detailed Report Results Section -->
@@ -301,7 +365,12 @@
         </div>
     `;
           }
-          ["start", "end", "dailyDate", "deliveryDate"].forEach(setTodayIfEmpty);
+          const salesStart = document.getElementById("start");
+          if (salesStart && !salesStart.value) {
+            const monthStart = new Date();
+            salesStart.value = `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, '0')}-01`;
+          }
+          ["end", "dailyDate", "deliveryDate"].forEach(setTodayIfEmpty);
           const expStartInput = document.getElementById("expStart");
           const expEndInput = document.getElementById("expEnd");
           

@@ -1,38 +1,81 @@
-<!-- templates/home.html -->
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-    <title>Fresh Threads - Home</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="/static/css/mobile.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f8f6ef">
+<title>Fresh Threads - Home</title>
+<style>
+:root{--ink:#183f3c;--green:#225f51;--cream:#f8f6ef;--muted:#65766e;--line:#dedfd3;--yellow:#f1ca68;--coral:#e99b84}
+*{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:inherit}.home{max-width:1200px;margin:auto;padding:26px 36px max(24px,env(safe-area-inset-bottom))}.masthead{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:22px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:11px}.brand-mark{background:var(--green);color:#fff;width:43px;height:43px;border-radius:13px;padding:9px}.brand strong{font-size:21px;letter-spacing:-.7px}.brand small{display:block;letter-spacing:2.3px;text-transform:uppercase;font-size:9px;font-weight:700;margin-top:2px}.header-note{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}.dot{height:7px;width:7px;background:#82a47e;border-radius:50%}
+.hero{display:grid;grid-template-columns:1fr 1.04fr;align-items:center;gap:24px;padding:35px 0 24px}.eyebrow{font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:750;display:flex;gap:8px;align-items:center}.eyebrow:before{content:"";width:23px;height:1px;background:var(--green)}h1{font-family:Georgia,"Times New Roman",serif;font-size:clamp(44px,5.6vw,72px);font-weight:400;letter-spacing:-3px;line-height:1.04;margin:20px 0}h1 em{color:var(--green);font-weight:400}.intro{font-size:15px;line-height:1.7;max-width:345px;color:var(--muted);margin:0}.little-note{display:inline-flex;align-items:center;gap:9px;margin-top:23px;padding:9px 13px;border:1px solid #dfe3d8;border-radius:24px;font-size:11px;background:#fffaf0}.little-note svg{width:17px;height:17px;color:#b68b31}
+.scene-wrap{position:relative;background:#eaf0e5;border-radius:44% 46% 38% 40%;padding:10px 7px 0}.scene{display:block;width:100%;height:auto}.scene-caption{position:absolute;right:0;bottom:12px;transform:rotate(-5deg);background:#f6d786;border:1px solid #e7c36e;padding:9px 14px;border-radius:4px;font-family:Georgia,serif;font-style:italic;font-size:15px;box-shadow:2px 3px 0 #173d3b0b}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin:15px 0 14px;gap:12px}.section-head h2{font-size:13px;letter-spacing:.2px;margin:0;font-weight:650}.section-head span{font-size:11px;color:var(--muted)}.tools{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.tool{display:flex;align-items:center;gap:12px;text-decoration:none;border:1px solid var(--line);background:#fffdf8;border-radius:15px;padding:18px 16px;min-height:95px;transition:transform .18s,box-shadow .18s,border-color .18s}.tool:hover{transform:translateY(-3px);box-shadow:0 7px 17px #173d3b0d;border-color:#a7bbaa}.tool:focus-visible{outline:3px solid #bc8535;outline-offset:4px}.tool-icon{width:37px;height:37px;flex-shrink:0;background:#eaf0e5;border-radius:11px;padding:9px}.tool-name{font-size:14px;font-weight:650;display:block}.tool-sub{font-size:10px;color:var(--muted);display:block;margin-top:4px;line-height:1.4}.arrow{margin-left:auto;align-self:flex-start;font-size:14px;color:#738b80}.primary{background:var(--green);color:#fff;border-color:var(--green)}.primary .tool-icon{background:#ffffff1c}.primary .tool-sub,.primary .arrow{color:#d3e5d9}.insights .tool-icon{background:#faedcd}.customers .tool-icon{background:#f7e5dc}.services .tool-icon{background:#e4eaf1}.reports .tool-icon{background:#e4eee5}.expenses .tool-icon{background:#f6e7d5}.expense-types .tool-icon{background:#eee7f0}.expense-types{grid-column:span 2}
+.bottom{margin-top:22px;padding:18px 0 0;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:18px}.laundry-line{font-family:Georgia,serif;font-style:italic;font-size:15px;display:flex;align-items:center;gap:9px}.bottom small{font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}.icon{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;width:100%;height:100%}.bubbles{animation:float 6s ease-in-out infinite}.bubble-two{animation-delay:-3s}@keyframes float{50%{transform:translateY(-6px)}}
+@media(min-width:1400px){.home{padding-top:38px}.hero{padding:48px 0 30px}}
+@media(max-width:850px){.home{padding:22px 24px}.tools{grid-template-columns:repeat(3,1fr)}.expense-types{grid-column:span 1}.hero{gap:12px}.tool{padding:15px 12px;gap:9px}.arrow{display:none}}
+@media(max-width:575px){.home{padding:18px 18px max(20px,env(safe-area-inset-bottom))}.masthead{padding-bottom:16px}.brand strong{font-size:20px}.header-note{display:none}.hero{grid-template-columns:1fr;gap:15px;padding:28px 0 14px}.hero-copy{text-align:center}.eyebrow{justify-content:center;font-size:9px}h1{font-size:49px;letter-spacing:-2px;margin:14px 0}.intro{margin:auto;font-size:13px;max-width:300px}.little-note{display:none}.scene-wrap{max-width:300px;width:100%;margin:0 auto;border-radius:40% 45% 35% 40%}.scene-caption{font-size:12px;padding:6px 10px;bottom:3px}.section-head{margin-top:19px}.section-head span{font-size:10px}.tools{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.tool{min-height:85px;padding:14px 11px;gap:9px;border-radius:13px}.tool-icon{width:32px;height:32px;padding:7px;border-radius:9px}.tool-name{font-size:13px}.tool-sub{font-size:10px}.expense-types{grid-column:span 2;min-height:66px}.bottom{margin-top:20px;flex-direction:column;gap:10px;text-align:center}.laundry-line{font-size:13px}}
+@media(prefers-reduced-motion:reduce){.bubbles{animation:none}.tool{transition:none}.tool:hover{transform:none}}
+</style>
 </head>
 <body>
-<div class="container text-center mt-5">
-    <h1 class="mb-4">Fresh Threads Laundry</h1>
-    <div class="row justify-content-center">
-        <div class="col-md-4 mb-3">
-            <a href="/billing" class="btn btn-primary btn-lg w-100">Billing</a>
-        </div>
-        <div class="col-md-4 mb-3">
-            <a href="/insights" class="btn btn-outline-primary btn-lg w-100">Insights</a>
-        </div>
-        <div class="col-md-4 mb-3">
-            <a href="/customers" class="btn btn-success btn-lg w-100">Customers</a>
-        </div>
-        <div class="col-md-4 mb-3">
-            <a href="/services" class="btn btn-warning btn-lg w-100">Services</a>
-        </div>
-        <div class="col-md-4 mb-3">
-  <a href="/reports" class="btn btn-info btn-lg w-100">📊 View Reports</a>
+<svg width="0" height="0" aria-hidden="true" style="position:absolute"><defs>
+<symbol id="washer" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="3"/><path d="M4 7h16M7 4.5h.1M10 4.5h.1"/><circle cx="12" cy="14" r="5"/><path d="M8 15c3-3 4 3 8-1"/></symbol>
+<symbol id="bill" viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 7h6M9 11h6M9 15h3"/></symbol>
+<symbol id="chart" viewBox="0 0 24 24"><path d="M4 3v17h17M8 15l4-5 4 2 5-7M17 5h4v4"/></symbol>
+<symbol id="people" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v3"/></symbol>
+<symbol id="shirt" viewBox="0 0 24 24"><path d="m8 3-6 4 3 5 3-2v11h8V10l3 2 3-5-6-4a4 4 0 0 1-8 0z"/></symbol>
+<symbol id="reports" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 16v-3M12 16V9M16 16v-5M8 6h8"/></symbol>
+<symbol id="wallet" viewBox="0 0 24 24"><path d="M4 6V4h14v3M4 6h15a2 2 0 0 1 2 2v11H5a2 2 0 0 1-2-2V8a2 2 0 0 1 1-2zM21 11h-6v5h6M17.5 13.5h.1"/></symbol>
+<symbol id="tag" viewBox="0 0 24 24"><path d="m3 3 9 1 9 9-8 8-9-9z"/><circle cx="8" cy="8" r="1"/></symbol>
+<symbol id="spark" viewBox="0 0 24 24"><path d="m12 2 2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5z"/></symbol>
+</defs></svg>
+<main class="home">
+<header class="masthead"><div class="brand"><span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#washer"/></svg></span><div><strong>FreshThreads</strong><small>Laundry &amp; a little love</small></div></div><div class="header-note"><span class="dot"></span>Good things come clean.</div></header>
+<section class="hero" aria-labelledby="welcome-title">
+<div class="hero-copy"><div class="eyebrow">A little care. A lot of fresh.</div><h1 id="welcome-title">A fresh start,<br><em>every day.</em></h1><p class="intro">A spin of the drum. A neatly folded shirt.<br>Little things that make the day feel lighter.</p><div class="little-note"><svg class="icon" aria-hidden="true"><use href="#spark"/></svg>Making laundry day a little brighter.</div></div>
+<div class="scene-wrap">
+<svg class="scene" viewBox="0 0 520 345" role="img" aria-label="A cheerful laundry corner with clothes drying, a washing machine and a basket of fresh towels">
+<ellipse cx="265" cy="310" rx="217" ry="14" fill="#d3ddce"/>
+<!-- The clothesline -->
+<path d="M36 42Q262 96 484 42" fill="none" stroke="#7d8b70" stroke-width="2"/>
+<path d="m93 58-27 18 15 25 12-9v62h66V92l12 9 15-25-27-18c-10 13-22 13-33 0z" fill="#eaa58c" stroke="#ca846c" stroke-width="2"/>
+<path d="M110 116h32M110 123h22" stroke="#f6cebe" stroke-width="3" stroke-linecap="round"/>
+<path d="M105 57v12M151 64v11" stroke="#9c7553" stroke-width="5" stroke-linecap="round"/>
+<path d="M232 76v47l-15 9c-12 9-1 23 11 19l23-10V78M272 76v47l-15 9c-12 9-1 23 11 19l23-10V76" fill="#f8dc8b" stroke="#d7bb70" stroke-width="2"/>
+<path d="M233 86h17M273 86h17" stroke="#e2b854" stroke-width="4"/><path d="M243 73v10M282 72v10" stroke="#9c7553" stroke-width="5" stroke-linecap="round"/>
+<path d="M342 67h71v94h-71z" fill="#9ebcaf" stroke="#739788" stroke-width="2"/><path d="M350 143h55M350 150h55" stroke="#e2eee5" stroke-width="3"/><path d="M351 64v11M404 57v13" stroke="#9c7553" stroke-width="5" stroke-linecap="round"/>
+<!-- The washing machine -->
+<rect x="98" y="163" width="158" height="144" rx="12" fill="#fffdf6" stroke="#315d50" stroke-width="2.5"/>
+<path d="M99 195h156" stroke="#315d50" stroke-width="2"/><rect x="111" y="175" width="44" height="9" rx="3" fill="#e4ebdf"/><circle cx="233" cy="179" r="7" fill="#f2cc6e" stroke="#315d50" stroke-width="1.5"/>
+<circle cx="177" cy="248" r="45" fill="#ecede2" stroke="#315d50" stroke-width="3"/><circle cx="177" cy="248" r="34" fill="#9bbeb3"/>
+<path d="M145 249c15-14 25 18 39 1s20-1 24 4c-4 36-56 35-63-5" fill="#6f9e91"/><path d="M158 224q-11 9-11 20" fill="none" stroke="#e0f0e6" stroke-width="5" stroke-linecap="round"/>
+<circle cx="171" cy="249" r="2" fill="#315d50"/><circle cx="187" cy="249" r="2" fill="#315d50"/><path d="M173 257q6 6 12 0" fill="none" stroke="#315d50" stroke-width="2" stroke-linecap="round"/>
+<path d="M113 307v5M241 307v5" stroke="#315d50" stroke-width="5"/>
+<!-- Folded towels and the basket -->
+<rect x="309" y="204" width="104" height="24" rx="10" fill="#e8a38d" stroke="#c6816a" stroke-width="2"/><path d="M320 214h80" stroke="#f6cab8" stroke-width="2"/>
+<rect x="300" y="225" width="121" height="22" rx="9" fill="#f3d17b" stroke="#ceae5e" stroke-width="2"/><path d="M315 235h92" stroke="#fff0bd" stroke-width="2"/>
+<path d="m294 244 14 59h106l15-59z" fill="#dac09b" stroke="#9a7d58" stroke-width="2"/><path d="M292 245h138M311 261h101M314 275h95M317 289h88M322 249l6 51M341 249l3 51M361 249v51M382 249l-3 51M403 249l-7 51" stroke="#ac8e67" stroke-width="2"/>
+<path d="M310 243q-7-26 15-28M412 242q9-25-11-29" fill="none" stroke="#9a7d58" stroke-width="3"/>
+<!-- A little greenery -->
+<path d="M57 283v-64M57 248q-30-2-24-27 26 3 24 27M58 231q-1-28 22-30 3 24-22 30M57 266q-25-1-24-19 26-1 24 19" fill="#6e9272" stroke="#53785b" stroke-width="2"/>
+<path d="M39 278h38l-6 31H45z" fill="#d99078" stroke="#bd765f" stroke-width="2"/>
+<!-- Soft soap bubbles -->
+<g class="bubbles" fill="#ffffff88" stroke="#b8d0bd" stroke-width="1.5"><circle cx="283" cy="178" r="13"/><circle cx="295" cy="151" r="6"/><path d="M276 174q0-4 4-5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></g>
+<g class="bubbles bubble-two" fill="#ffffff88" stroke="#b8d0bd" stroke-width="1.5"><circle cx="456" cy="191" r="17"/><circle cx="472" cy="163" r="7"/><path d="M446 187q1-5 6-6" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></g>
+<path d="m51 126 3 7 7 3-7 3-3 7-3-7-7-3 7-3zM458 104l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" fill="#e4bd5b"/>
+</svg><div class="scene-caption">Freshly folded. Happy little things.</div>
 </div>
-<div class="col-md-4 mb-3">
-  <a href="/expenses" class="btn btn-outline-danger btn-lg w-100">💸 Expenses</a>
-</div>
-<div class="col-md-4 mb-3">
-  <a href="/expense-types" class="btn btn-outline-secondary btn-lg w-100">🧾 Expense Types</a>
-</div>
-    </div>
-</div>
+</section>
+<nav aria-label="Store tools"><div class="section-head"><h2>Your everyday essentials</h2><span>Pick a place to begin ↗</span></div>
+<div class="tools">
+{% for href,name,sub,icon,style in [('/billing','Billing','A fresh order starts here','bill','primary'),('/insights','Insights','See how things are growing','chart','insights'),('/customers','Customers','Familiar faces, fresh threads','people','customers'),('/services','Services','A little care for every fabric','shirt','services'),('/reports','Reports','Everything neatly in order','reports','reports'),('/expenses','Expenses','Keep the numbers tidy','wallet','expenses'),('/expense-types','Expense Types','A place for every expense','tag','expense-types')] %}
+<a href="{{ href }}" class="tool {{ style }}"><span class="tool-icon"><svg class="icon" aria-hidden="true"><use href="#{{ icon }}"/></svg></span><span><span class="tool-name">{{ name }}</span><span class="tool-sub">{{ sub }}</span></span><span class="arrow" aria-hidden="true">↗</span></a>
+{% endfor %}
+</div></nav>
+<footer class="bottom"><div class="laundry-line"><span aria-hidden="true">✳</span> Lost socks? We prefer to call them independent spirits.</div><small>Made for a fresh kind of day</small></footer>
+</main>
 </body>
 </html>
